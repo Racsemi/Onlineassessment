@@ -11,6 +11,18 @@ export const checkSession = async (req: Request, res: Response) => {
     
     if (!invitation) return res.status(404).json({ error: 'Invalid invitation' });
     
+    if (invitation.assessment.status !== 'PUBLISHED') {
+      return res.status(403).json({ error: 'This assessment is currently not active.' });
+    }
+    
+    const now = new Date();
+    if (invitation.assessment.startDate && now < invitation.assessment.startDate) {
+      return res.status(403).json({ error: 'This assessment has not started yet.' });
+    }
+    if (invitation.assessment.endDate && now > invitation.assessment.endDate) {
+      return res.status(403).json({ error: 'This assessment has already ended.' });
+    }
+    
     const settings = await prisma.platformSettings.findUnique({ where: { id: 'GLOBAL' } });
 
     res.json({
@@ -53,6 +65,17 @@ export const startSession = async (req: Request, res: Response) => {
     
     if (!invitation) return res.status(404).json({ error: 'Invalid invitation' });
     if (invitation.status === 'EXPIRED') return res.status(403).json({ error: 'Invitation expired' });
+    if (invitation.assessment.status !== 'PUBLISHED') {
+      return res.status(403).json({ error: 'This assessment is currently not active.' });
+    }
+    
+    const now = new Date();
+    if (invitation.assessment.startDate && now < invitation.assessment.startDate) {
+      return res.status(403).json({ error: 'This assessment has not started yet.' });
+    }
+    if (invitation.assessment.endDate && now > invitation.assessment.endDate) {
+      return res.status(403).json({ error: 'This assessment has already ended.' });
+    }
 
     // Check if session already exists
     let session = await prisma.candidateSession.findFirst({

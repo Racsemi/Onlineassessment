@@ -209,11 +209,23 @@ export const getPublicAssessment = async (req: Request, res: Response) => {
     const { id } = req.params;
     const assessment = await prisma.assessment.findUnique({
       where: { id },
-      select: { id: true, title: true, description: true }
+      select: { id: true, title: true, description: true, status: true, startDate: true, endDate: true }
     });
     
     if (!assessment) {
       return res.status(404).json({ error: 'Assessment not found' });
+    }
+    
+    if (assessment.status !== 'PUBLISHED') {
+      return res.status(403).json({ error: 'This assessment is currently not accepting registrations.' });
+    }
+    
+    const now = new Date();
+    if (assessment.startDate && now < assessment.startDate) {
+      return res.status(403).json({ error: 'This assessment has not started yet.' });
+    }
+    if (assessment.endDate && now > assessment.endDate) {
+      return res.status(403).json({ error: 'This assessment has already ended.' });
     }
     
     const settings = await prisma.platformSettings.findUnique({ where: { id: 'GLOBAL' } });
