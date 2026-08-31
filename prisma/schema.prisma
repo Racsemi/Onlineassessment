@@ -142,11 +142,24 @@ model Candidate {
   sessions      CandidateSession[]
   results       AssessmentResult[]
   invitations   Invitation[]
+  files         CandidateFile[]
   
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   
   @@unique([email, assessmentId])
+}
+
+model CandidateFile {
+  id          String    @id @default(uuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  
+  fieldName   String
+  fileName    String
+  fileData    String    @db.Text
+  
+  createdAt   DateTime  @default(now())
 }
 
 model Invitation {

@@ -13,13 +13,15 @@ const PublicRegistration = () => {
   const [email, setEmail] = useState('');
   const [customData, setCustomData] = useState<Record<string, any>>({});
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [registering, setRegistering] = useState(false);
-  const [error, setError] = useState('');
   const [step, setStep] = useState<'RULES' | 'FORM'>('RULES');
 
   // Camera State
   const [photo, setPhoto] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [error, setError] = useState('');
+  const [filesData, setFilesData] = useState<Record<string, { fileName: string, fileData: string }>>({});
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
@@ -115,7 +117,8 @@ const PublicRegistration = () => {
         branch: customData.branch,
         cgpa: customData.cgpa ? parseFloat(customData.cgpa) : null,
         photo,
-        customFields: customData
+        customFields: customData,
+        files: filesData
       };
       const res = await api.post('/candidates/register', payload);
       navigate(`/test/${res.data.token}`);
@@ -286,7 +289,7 @@ const PublicRegistration = () => {
             </div>
 
             {/* Right Column: Form */}
-            <div className="md:w-7/12 p-6 bg-white">
+            <div className="md:w-7/12 p-6 pb-16 bg-white">
               <h3 className="text-base font-bold text-dark mb-1">Step 2: Candidate Details</h3>
               <p className="text-xs text-gray-500 mb-5">Please fill in your details accurately to proceed.</p>
 
@@ -333,6 +336,25 @@ const PublicRegistration = () => {
                               </label>
                             ))}
                           </div>
+                        ) : field.type === 'file' ? (
+                          <input type="file" required={field.required}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                if (file.size > 2 * 1024 * 1024) {
+                                  setError(`${field.label} must be less than 2MB`);
+                                  e.target.value = '';
+                                  return;
+                                }
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  setFilesData(prev => ({ ...prev, [field.name]: { fileName: file.name, fileData: reader.result as string } }));
+                                  setCustomData({ ...customData, [field.name]: file.name });
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="form-input p-2 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20" />
                         ) : (
                           <input type={field.type === 'number' ? 'number' : 'text'} required={field.required}
                             value={customData[field.name] || ''}

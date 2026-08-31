@@ -46,7 +46,10 @@ export const getAllCandidates = async (req: Request, res: Response) => {
       include: {
         assessment: true,
         invitations: true,
-        results: true
+        results: true,
+        files: {
+          select: { id: true, fieldName: true, fileName: true, createdAt: true }
+        }
       }
     });
     res.json(candidates);
@@ -62,7 +65,10 @@ export const getCandidates = async (req: Request, res: Response) => {
       where: { assessmentId },
       include: {
         invitations: true,
-        results: true
+        results: true,
+        files: {
+          select: { id: true, fieldName: true, fileName: true, createdAt: true }
+        }
       }
     });
     res.json(candidates);
@@ -137,7 +143,7 @@ export const importCandidatesCsv = async (req: Request, res: Response) => {
 
 export const registerPublicCandidate = async (req: Request, res: Response) => {
   try {
-    const { assessmentId, name, email, phone, college, branch, cgpa, photo, customFields } = req.body;
+    const { assessmentId, name, email, phone, college, branch, cgpa, photo, customFields, files } = req.body;
     
     const assessment = await prisma.assessment.findUnique({ where: { id: assessmentId } });
     if (!assessment) return res.status(404).json({ error: 'Assessment not found' });
@@ -149,6 +155,27 @@ export const registerPublicCandidate = async (req: Request, res: Response) => {
       update: { name, phone, college, branch, cgpa: parsedCgpa, photo, customFields: customFields || {} },
       create: { assessmentId, name, email, phone, college, branch, cgpa: parsedCgpa, photo, customFields: customFields || {} }
     });
+    
+    // Process files if any
+    if (files && Object.keys(files).length > 0) {
+      for (const [fieldName, fileObj] of Object.entries(files)) {
+        const { fileName, fileData } = fileObj as any;
+        
+        // delete existing file for this field if any (to replace)
+        await prisma.candidateFile.deleteMany({
+          where: { candidateId: candidate.id, fieldName }
+        });
+        
+        await prisma.candidateFile.create({
+          data: {
+            candidateId: candidate.id,
+            fieldName,
+            fileName,
+            fileData
+          }
+        });
+      }
+    }
     
     const token = crypto.randomBytes(32).toString('hex');
     
@@ -185,6 +212,34 @@ export const resetTest = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Reset test error:', error);
     res.status(500).json({ error: 'Failed to reset test' });
+  }
+};
+
+export const getCandidateFile = async (req: Request, res: Response) => {
+  try {
+    const { id, fileId } = req.params;
+    const file = await prisma.candidateFile.findFirst({
+      where: { id: fileId, candidateId: id }
+    });
+    
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    // fileData is Base64 (data:application/pdf;base64,...)
+    const matches = file.fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return res.status(400).json({ error: 'Invalid file format' });
+    }
+    
+    const mimeType = matches[1];
+    const buffer = Buffer.from(matches[2], 'base64');
+    
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to download file' });
   }
 };
 

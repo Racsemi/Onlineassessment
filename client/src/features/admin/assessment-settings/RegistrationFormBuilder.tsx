@@ -5,7 +5,7 @@ export interface FormField {
   id: string;
   name: string;
   label: string;
-  type: 'text' | 'email' | 'number' | 'radio' | 'select';
+  type: 'text' | 'email' | 'number' | 'radio' | 'select' | 'file';
   required: boolean;
   options?: string[]; // for radio or select
 }
@@ -112,6 +112,7 @@ const RegistrationFormBuilder: React.FC<RegistrationFormBuilderProps> = ({ field
                     <option value="number">Number</option>
                     <option value="radio">Radio Buttons</option>
                     <option value="select">Dropdown</option>
+                    <option value="file">File Upload (Resume/Doc)</option>
                   </select>
                 </div>
               </div>

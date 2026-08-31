@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Trash2, Edit, Upload, X, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, Search, Trash2, Edit, Upload, X, CheckCircle, AlertTriangle, Loader2, Download } from 'lucide-react';
 import api from '../../lib/axios';
 
 const CandidatesList = () => {
@@ -195,6 +195,7 @@ const CandidatesList = () => {
               <th>Candidate</th>
               <th>Assessment</th>
               <th>Status</th>
+              <th>Attachments</th>
               <th className="text-right">Actions</th>
             </tr>
           </thead>
@@ -235,6 +236,27 @@ const CandidatesList = () => {
                   <span className={c.results?.length > 0 ? 'badge-success' : 'badge-info'}>
                     {c.results?.length > 0 ? 'Completed' : 'Invited'}
                   </span>
+                </td>
+                <td>
+                  {c.files && c.files.length > 0 ? (
+                    <div className="flex flex-col gap-1">
+                      {c.files.map((file: any) => (
+                        <a 
+                          key={file.id} 
+                          href={`${import.meta.env.VITE_API_URL}/candidates/${c.id}/files/${file.id}`}
+                          download={file.fileName}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs flex items-center space-x-1 text-primary hover:underline"
+                        >
+                          <Download size={14} />
+                          <span className="truncate max-w-[120px]" title={file.fileName}>{file.fieldName}</span>
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-slate-400 text-xs">—</span>
+                  )}
                 </td>
                 <td className="text-right">
                   <div className="flex items-center justify-end space-x-2">
