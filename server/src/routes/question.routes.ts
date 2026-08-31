@@ -1,0 +1,16 @@
+import { Router } from 'express';
+import multer from 'multer';
+import { requireAuth } from '../middleware/auth.middleware';
+import { createQuestion, createCodingQuestion, validateCsv, importCsv, getQuestions } from '../controllers/question.controller';
+
+const upload = multer({ storage: multer.memoryStorage() });
+const router = Router();
+router.use(requireAuth);
+
+router.get('/', getQuestions);
+router.post('/mcq', createQuestion);
+router.post('/coding', createCodingQuestion);
+router.post('/csv/validate', upload.single('file'), validateCsv);
+router.post('/csv/import', importCsv);
+
+export default router;
