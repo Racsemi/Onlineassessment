@@ -8,8 +8,28 @@ interface InstructionsEditorProps {
 }
 
 const InstructionsEditor: React.FC<InstructionsEditorProps> = ({ instructions, setInstructions, rules, setRules }) => {
+  const loadDefaults = () => {
+    setInstructions(`Welcome to the Online Assessment!
+Please read all the questions carefully before answering.
+Ensure you have a stable internet connection and a quiet environment.
+Good luck!`);
+    setRules(`1. Ensure your camera and microphone are working properly.
+2. Do not switch tabs or minimize the browser window. Doing so will flag your test.
+3. Full-screen mode is mandatory. Escaping full-screen will trigger a warning.
+4. Use of mobile phones, external materials, or other devices is strictly prohibited.
+5. Plagiarism in coding answers will result in immediate disqualification.`);
+  };
+
   return (
     <div className="space-y-8 max-w-4xl">
+      <div className="flex justify-end mb-4">
+        <button 
+          onClick={loadDefaults}
+          className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          Load Default Templates
+        </button>
+      </div>
       <div>
         <div className="mb-2">
           <h3 className="text-lg font-bold text-dark">Welcome Instructions</h3>

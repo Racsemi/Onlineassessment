@@ -1,12 +1,34 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, FileQuestion, LogOut, Settings, Zap } from 'lucide-react';
+import { LayoutDashboard, Users, FileQuestion, LogOut, Settings, Zap, Loader2 } from 'lucide-react';
+import api from '../../lib/axios';
 
 const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [loading, setLoading] = useState(true);
 
-  const handleLogout = () => {
+  useEffect(() => {
+    const verifyAuth = async () => {
+      try {
+        const res = await api.get('/auth/me');
+        if (res.data.user.role !== 'ADMIN') {
+          navigate('/login');
+        } else {
+          setLoading(false);
+        }
+      } catch {
+        // Axios interceptor will handle the redirect, but we set loading false here just in case
+        navigate('/login');
+      }
+    };
+    verifyAuth();
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (e) {}
     navigate('/login');
   };
 
@@ -16,6 +38,14 @@ const AdminLayout = () => {
     { name: 'Candidates', path: '/admin/candidates', icon: <Users size={18} /> },
     { name: 'Settings', path: '/admin/settings', icon: <Settings size={18} /> },
   ];
+
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-background">
+        <Loader2 className="animate-spin text-primary w-10 h-10" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">

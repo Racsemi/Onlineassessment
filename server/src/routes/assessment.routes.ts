@@ -6,7 +6,10 @@ import {
   getAssessmentById, 
   updateAssessment,
   getAssessmentResults,
-  getPublicAssessment
+  getPublicAssessment,
+  deleteAssessment,
+  updateResultStatus,
+  updateAnswerScore
 } from '../controllers/assessment.controller';
 
 const router = Router();
@@ -21,6 +24,9 @@ router.post('/', createAssessment);
 router.get('/', getAssessments);
 router.get('/:id', getAssessmentById);
 router.get('/:id/results', getAssessmentResults);
+router.put('/:id/results/:resultId/status', updateResultStatus);
+router.put('/:id/results/:resultId/answers/:answerId/score', updateAnswerScore);
 router.put('/:id', updateAssessment);
+router.delete('/:id', deleteAssessment);
 
 export default router;

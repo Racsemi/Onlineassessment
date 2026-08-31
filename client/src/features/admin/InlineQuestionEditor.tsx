@@ -4,39 +4,42 @@ import api from '../../lib/axios';
 
 interface InlineQuestionEditorProps {
   sectionId?: string;
+  initialData?: any;
   onSave: (questionId: string) => void;
   onCancel: () => void;
 }
 
-const InlineQuestionEditor: React.FC<InlineQuestionEditorProps> = ({ sectionId, onSave, onCancel }) => {
-  const [type, setType] = useState('SINGLE_CHOICE');
-  const [text, setText] = useState('');
-  const [category, setCategory] = useState('General');
-  const [marks, setMarks] = useState(1);
-  const [negativeMarks, setNegativeMarks] = useState<number | ''>('');
-  const [difficulty, setDifficulty] = useState('Medium');
+const InlineQuestionEditor: React.FC<InlineQuestionEditorProps> = ({ sectionId, initialData, onSave, onCancel }) => {
+  const isEdit = !!initialData;
+  const [type, setType] = useState(initialData?.type || 'SINGLE_CHOICE');
+  const [text, setText] = useState(initialData?.text || '');
+  const [category, setCategory] = useState(initialData?.category || 'General');
+  const [marks, setMarks] = useState(initialData?.marks || 1);
+  const [negativeMarks, setNegativeMarks] = useState<number | ''>(initialData?.negativeMarks ?? '');
+  const [difficulty, setDifficulty] = useState(initialData?.difficulty || 'Medium');
   const [saving, setSaving] = useState(false);
 
   // MCQ State
-  const [options, setOptions] = useState([
+  const defaultOptions = [
     { text: '', isCorrect: false },
     { text: '', isCorrect: false },
     { text: '', isCorrect: false },
     { text: '', isCorrect: false }
-  ]);
-  const [expectedAnswer, setExpectedAnswer] = useState('');
-  const [tolerance, setTolerance] = useState(0);
+  ];
+  const [options, setOptions] = useState(initialData?.options || defaultOptions);
+  const [expectedAnswer, setExpectedAnswer] = useState(initialData?.expectedAnswer || '');
+  const [tolerance, setTolerance] = useState(initialData?.tolerance || 0);
 
   // Coding State
-  const [codingTitle, setCodingTitle] = useState('');
-  const [codingDesc, setCodingDesc] = useState('');
-  const [inputFormat, setInputFormat] = useState('');
-  const [outputFormat, setOutputFormat] = useState('');
-  const [constraints, setConstraints] = useState('');
-  const [timeLimit, setTimeLimit] = useState(2000);
-  const [memoryLimit, setMemoryLimit] = useState(256);
-  const [allowedLanguages, setAllowedLanguages] = useState(['PYTHON', 'JAVA', 'CPP', 'JS']);
-  const [testCases, setTestCases] = useState([
+  const [codingTitle, setCodingTitle] = useState(initialData?.title || '');
+  const [codingDesc, setCodingDesc] = useState(initialData?.description || '');
+  const [inputFormat, setInputFormat] = useState(initialData?.inputFormat || '');
+  const [outputFormat, setOutputFormat] = useState(initialData?.outputFormat || '');
+  const [constraints, setConstraints] = useState(initialData?.constraints || '');
+  const [timeLimit, setTimeLimit] = useState(initialData?.timeLimit || 2000);
+  const [memoryLimit, setMemoryLimit] = useState(initialData?.memoryLimit || 256);
+  const [allowedLanguages, setAllowedLanguages] = useState(initialData?.allowedLanguages || ['PYTHON', 'JAVA', 'CPP', 'JS']);
+  const [testCases, setTestCases] = useState(initialData?.testCases || [
     { input: '', expectedOutput: '', isHidden: false }
   ]);
 
@@ -45,8 +48,8 @@ const InlineQuestionEditor: React.FC<InlineQuestionEditorProps> = ({ sectionId, 
     try {
       let res;
       if (type === 'CODING') {
-        res = await api.post('/questions/coding', {
-          sectionId,
+        const payload = {
+          sectionId: isEdit ? undefined : sectionId,
           title: codingTitle,
           description: codingDesc,
           inputFormat,
@@ -56,21 +59,31 @@ const InlineQuestionEditor: React.FC<InlineQuestionEditorProps> = ({ sectionId, 
           timeLimit: Number(timeLimit),
           memoryLimit: Number(memoryLimit),
           allowedLanguages,
-          testCases
-        });
+          testCases: testCases.map((tc: any) => ({ input: tc.input, expectedOutput: tc.expectedOutput, isHidden: tc.isHidden }))
+        };
+        if (isEdit) {
+          res = await api.put(`/questions/coding/${initialData.id}`, payload);
+        } else {
+          res = await api.post('/questions/coding', payload);
+        }
       } else {
-        res = await api.post('/questions/mcq', {
-          sectionId,
+        const payload = {
+          sectionId: isEdit ? undefined : sectionId,
           text,
           type,
           category,
           difficulty,
           marks: Number(marks),
           negativeMarks: negativeMarks === '' ? null : Number(negativeMarks),
-          options: (type === 'SINGLE_CHOICE' || type === 'MULTIPLE_CHOICE') ? options : [],
+          options: (type === 'SINGLE_CHOICE' || type === 'MULTIPLE_CHOICE') ? options.map((opt: any) => ({ text: opt.text, isCorrect: opt.isCorrect })) : [],
           expectedAnswer,
           tolerance: Number(tolerance)
-        });
+        };
+        if (isEdit) {
+          res = await api.put(`/questions/mcq/${initialData.id}`, payload);
+        } else {
+          res = await api.post('/questions/mcq', payload);
+        }
       }
       onSave(res.data.id);
     } catch (err) {
@@ -88,10 +101,10 @@ const InlineQuestionEditor: React.FC<InlineQuestionEditorProps> = ({ sectionId, 
     setTestCases(updated);
   };
   const removeTestCase = (index: number) => {
-    if (testCases.length > 1) setTestCases(testCases.filter((_, i) => i !== index));
+    if (testCases.length > 1) setTestCases(testCases.filter((_: any, i: number) => i !== index));
   };
   const toggleLanguage = (lang: string) => {
-    if (allowedLanguages.includes(lang)) setAllowedLanguages(allowedLanguages.filter(l => l !== lang));
+    if (allowedLanguages.includes(lang)) setAllowedLanguages(allowedLanguages.filter((l: string) => l !== lang));
     else setAllowedLanguages([...allowedLanguages, lang]);
   };
 
@@ -101,8 +114,8 @@ const InlineQuestionEditor: React.FC<InlineQuestionEditorProps> = ({ sectionId, 
     <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
       <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
         <div>
-          <h2 className="text-xl font-bold text-dark">Create Inline Question</h2>
-          <p className="text-sm text-gray-500">This question will be automatically added to the section.</p>
+          <h2 className="text-xl font-bold text-dark">{isEdit ? 'Edit Question' : 'Create Inline Question'}</h2>
+          <p className="text-sm text-gray-500">{isEdit ? 'Update this question.' : 'This question will be automatically added to the section.'}</p>
         </div>
         <button onClick={onCancel} className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors">
           <X size={20} />
@@ -144,7 +157,7 @@ const InlineQuestionEditor: React.FC<InlineQuestionEditorProps> = ({ sectionId, 
               type="number" 
               step="0.1"
               value={negativeMarks}
-              onChange={(e) => setNegativeMarks(e.target.value)}
+              onChange={(e) => setNegativeMarks(e.target.value === '' ? '' : Number(e.target.value))}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
               placeholder="e.g. 0.25"
             />
@@ -221,7 +234,7 @@ const InlineQuestionEditor: React.FC<InlineQuestionEditorProps> = ({ sectionId, 
               </div>
               
               <div className="space-y-4">
-                {testCases.map((tc, index) => (
+                {testCases.map((tc: any, index: number) => (
                   <div key={index} className="flex gap-4 items-start bg-gray-50 p-4 rounded-xl border border-gray-200">
                     <div className="flex-1 grid grid-cols-2 gap-4">
                       <div>
@@ -269,7 +282,7 @@ const InlineQuestionEditor: React.FC<InlineQuestionEditorProps> = ({ sectionId, 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">Options</label>
                 <div className="space-y-3">
-                  {options.map((opt, index) => (
+                  {options.map((opt: any, index: number) => (
                     <div key={index} className="flex items-center space-x-3">
                       <input 
                         type={type === 'SINGLE_CHOICE' ? "radio" : "checkbox"} 

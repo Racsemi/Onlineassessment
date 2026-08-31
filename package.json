@@ -11,6 +11,8 @@
     "dev:server": "npm run dev --workspace=server",
     "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
     "build": "npm run build --workspaces",
+    "build:server": "npm run build --workspace=server",
+    "start:server": "npm run start --workspace=server",
     "db:generate": "npx prisma generate",
     "db:push": "npx prisma db push"
   },

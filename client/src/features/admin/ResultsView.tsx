@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Search, Filter, ShieldAlert, X, Eye } from 'lucide-react';
+import { useParams, Link } from 'react-router-dom';
+import { Search, Filter, ShieldAlert, X, Eye, Printer, ArrowLeft, Download, AlertTriangle, Check } from 'lucide-react';
 import api from '../../lib/axios';
+
 
 const ResultsView = () => {
   const { id } = useParams();
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -22,6 +25,39 @@ const ResultsView = () => {
     };
     fetchResults();
   }, [id]);
+
+  const handleStatusChange = async (resultId: string, newStatus: string) => {
+    try {
+      await api.put(`/assessments/${id}/results/${resultId}/status`, { status: newStatus });
+      setResults(prev => prev.map(r => r.id === resultId ? { ...r, status: newStatus } : r));
+      if (selectedCandidate?.id === resultId) {
+        setSelectedCandidate((prev: any) => ({ ...prev, status: newStatus }));
+      }
+    } catch (err) {
+      alert("Failed to update status");
+    }
+  };
+
+  const handleScoreUpdate = async (answerId: string, isCoding: boolean, score: number) => {
+    try {
+      const res = await api.put(`/assessments/${id}/results/${selectedCandidate.id}/answers/${answerId}/score`, { score, isCoding });
+      
+      const updatedCandidate = { ...selectedCandidate };
+      if (isCoding) {
+        updatedCandidate.codingSubmissions = updatedCandidate.codingSubmissions.map((ca: any) => ca.id === answerId ? { ...ca, score } : ca);
+      } else {
+        updatedCandidate.standardAnswers = updatedCandidate.standardAnswers.map((ans: any) => ans.id === answerId ? { ...ans, score } : ans);
+      }
+      updatedCandidate.score = res.data.updatedResult.totalScore;
+      updatedCandidate.percentage = res.data.updatedResult.percentage;
+      
+      setSelectedCandidate(updatedCandidate);
+      
+      setResults(prev => prev.map(r => r.id === selectedCandidate.id ? { ...r, score: updatedCandidate.score, percentage: updatedCandidate.percentage } : r));
+    } catch (err) {
+      alert("Failed to update score");
+    }
+  };
 
   const handleExportCsv = () => {
     if (results.length === 0) return;
@@ -46,10 +82,38 @@ const ResultsView = () => {
     document.body.removeChild(link);
   };
 
+  const handleExportPdf = () => {
+    const element = document.getElementById('printable-modal');
+    if (!element) return;
+    
+    // Temporarily remove max-height and overflow to ensure full capture
+    const originalMaxHeight = element.style.maxHeight;
+    const originalOverflow = element.style.overflow;
+    element.style.maxHeight = 'none';
+    element.style.overflow = 'visible';
+    
+    // Trigger the browser's native print dialog
+    window.print();
+    
+    // Restore original styles
+    element.style.maxHeight = originalMaxHeight;
+    element.style.overflow = originalOverflow;
+  };
+
+  const filteredResults = results.filter(r => {
+    const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase()) || r.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filterStatus === 'ALL' || r.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-start mb-8">
         <div>
+          <Link to="/admin" className="text-gray-500 hover:text-dark flex items-center space-x-2 text-sm font-medium mb-3 transition-colors">
+            <ArrowLeft size={16} />
+            <span>Back to Dashboard</span>
+          </Link>
           <h1 className="text-3xl font-bold text-dark">Assessment Results</h1>
           <p className="text-gray-500 mt-1">Review candidate scores and proctoring logs</p>
         </div>
@@ -68,8 +132,24 @@ const ResultsView = () => {
             <input 
               type="text" 
               placeholder="Search candidates..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             />
+          </div>
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="pl-10 pr-8 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary appearance-none bg-white text-gray-700 font-medium"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="EVALUATED">Evaluated</option>
+              <option value="SHORTLISTED">Shortlisted</option>
+              <option value="ON_HOLD">On Hold</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
           </div>
         </div>
         
@@ -84,7 +164,7 @@ const ResultsView = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {results.map((r: any) => (
+            {filteredResults.map((r: any) => (
               <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4">
                   <div className="font-medium text-dark">{r.name}</div>
@@ -98,7 +178,7 @@ const ResultsView = () => {
                   )}
                 </td>
                 <td className="px-6 py-4">
-                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                  <span className={`px-3 py-1 text-xs font-bold rounded-full ${
                     r.status === 'SHORTLISTED' ? 'bg-success/10 text-success' :
                     r.status === 'UNDER_REVIEW' ? 'bg-warning/10 text-warning' :
                     'bg-gray-100 text-gray-700'
@@ -140,22 +220,78 @@ const ResultsView = () => {
 
       {/* Candidate Details Modal */}
       {selectedCandidate && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center z-10">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:p-0 print:bg-white print-hide-bg">
+          <div id="printable-modal" className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto print:shadow-none">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center z-10 print-hide">
               <div>
-                <h2 className="text-xl font-bold text-dark">{selectedCandidate.name}</h2>
+                <div className="flex items-center space-x-3 mb-1">
+                  <h2 className="text-xl font-bold text-dark">{selectedCandidate.name}</h2>
+                  <span className="text-sm font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded">Score: {selectedCandidate.score}</span>
+                  <select 
+                    value={selectedCandidate.status}
+                    onChange={(e) => handleStatusChange(selectedCandidate.id, e.target.value)}
+                    className={`text-xs font-bold px-2 py-1 rounded border outline-none cursor-pointer
+                      ${selectedCandidate.status === 'SHORTLISTED' ? 'bg-success/10 text-success border-success/30' : 
+                        selectedCandidate.status === 'REJECTED' ? 'bg-danger/10 text-danger border-danger/30' : 
+                        selectedCandidate.status === 'ON_HOLD' ? 'bg-amber-100 text-amber-700 border-amber-300' : 
+                        'bg-blue-50 text-blue-700 border-blue-200'}`}
+                  >
+                    <option value="EVALUATED">EVALUATED</option>
+                    <option value="SHORTLISTED">SHORTLISTED</option>
+                    <option value="ON_HOLD">ON_HOLD</option>
+                    <option value="REJECTED">REJECTED</option>
+                  </select>
+                </div>
                 <p className="text-sm text-gray-500">{selectedCandidate.email}</p>
               </div>
-              <button 
-                onClick={() => setSelectedCandidate(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
-              >
-                <X size={24} />
-              </button>
+              <div className="flex space-x-3">
+                <button 
+                  onClick={handleExportPdf}
+                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition-colors font-bold text-sm flex items-center space-x-2 print-hide"
+                >
+                  <Printer size={16} />
+                  <span>Export PDF</span>
+                </button>
+                <button 
+                  onClick={() => setSelectedCandidate(null)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+                >
+                  <X size={24} />
+                </button>
+              </div>
             </div>
             
             <div className="p-6">
+              {/* Registration Details */}
+              <div className="mb-8 border-b border-gray-100 pb-6 flex flex-col md:flex-row gap-8">
+                {selectedCandidate.photo && (
+                  <div className="flex-shrink-0">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Verified Photo</p>
+                    <img src={selectedCandidate.photo} alt="Candidate" className="w-32 h-32 md:w-40 md:h-40 object-cover rounded-xl border-2 border-gray-200 shadow-sm" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-dark mb-4">Registration Details</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8">
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Full Name</p>
+                      <p className="font-medium text-dark">{selectedCandidate.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Email Address</p>
+                      <p className="font-medium text-dark">{selectedCandidate.email}</p>
+                    </div>
+                    
+                    {selectedCandidate.customFields && Object.entries(selectedCandidate.customFields).map(([key, val]) => (
+                      <div key={key}>
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">{key}</p>
+                        <p className="font-medium text-dark">{String(val)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <h3 className="text-lg font-bold text-dark mb-4 border-b pb-2">Integrity Report</h3>
               {selectedCandidate.integrityEvents?.length > 0 ? (
                 <div className="space-y-6">
@@ -203,26 +339,81 @@ const ResultsView = () => {
                   <p className="text-gray-600">No integrity flags were recorded during this session.</p>
                 </div>
               )}
+
+              {/* Standard Answers Section */}
+              {selectedCandidate.standardAnswers?.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-bold text-dark mb-4 border-b pb-2">Assessment Answers</h3>
+                  <div className="space-y-4">
+                    {selectedCandidate.standardAnswers.map((ans: any, idx: number) => (
+                      <div key={idx} className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-bold text-dark text-sm">{idx + 1}. {ans.questionText}</h4>
+                          <div className="flex items-center space-x-2 ml-4">
+                            <span className="text-xs text-gray-500 font-bold">Score:</span>
+                            <input 
+                              type="number" 
+                              className="w-16 px-2 py-1 text-sm font-bold text-center border border-gray-300 rounded focus:border-primary outline-none print:border-none print:w-auto"
+                              defaultValue={ans.score ?? ''}
+                              onBlur={(e) => handleScoreUpdate(ans.id, false, Number(e.target.value))}
+                              step="0.5"
+                            />
+                            <span className="text-xs text-gray-500 font-bold">/ {ans.maxScore}</span>
+                          </div>
+                        </div>
+                        <div className="bg-white border border-gray-100 rounded-lg p-3 text-sm text-gray-700">
+                          <span className="font-semibold text-gray-500 mr-2">Candidate Response:</span>
+                          {ans.response ? (
+                            <span className="font-medium text-dark">{ans.response}</span>
+                          ) : (
+                            <span className="italic text-gray-400">No response provided</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Coding Submissions Section */}
               {selectedCandidate.codingSubmissions?.length > 0 && (
                 <div className="mt-6">
                   <h3 className="text-lg font-bold text-dark mb-4 border-b pb-2">Coding Submissions</h3>
                   <div className="space-y-3">
                     {selectedCandidate.codingSubmissions.map((cs: any, idx: number) => (
-                      <div key={idx} className="bg-purple-50 border border-purple-100 rounded-xl p-4 flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-dark">{cs.questionTitle || 'Coding Question'}</div>
-                          <div className="text-sm text-gray-500 mt-1">Language: <span className="font-mono font-bold text-purple-700">{cs.language}</span></div>
-                        </div>
-                        <div className="text-right">
-                          <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                            cs.status === 'SUBMITTED' ? 'bg-success/10 text-success' : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {cs.status}
-                          </span>
-                          <div className="text-sm text-gray-500 mt-1">
-                            Score: {cs.score ?? 'Pending'} / {cs.maxScore}
+                      <div key={idx} className="bg-purple-50 border border-purple-100 rounded-xl p-4 flex flex-col">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="font-bold text-dark">{cs.questionTitle || 'Coding Question'}</div>
+                            <div className="text-sm text-gray-500 mt-1">Language: <span className="font-mono font-bold text-purple-700">{cs.language}</span></div>
                           </div>
+                          <div className="text-right">
+                            <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                              cs.status === 'SUBMITTED' ? 'bg-success/10 text-success' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {cs.status}
+                            </span>
+                            <div className="flex items-center justify-end space-x-2 mt-2">
+                              <span className="text-xs text-gray-500 font-bold">Score:</span>
+                              <input 
+                                type="number" 
+                                className="w-16 px-2 py-1 text-sm font-bold text-center border border-gray-300 rounded focus:border-primary outline-none print:border-none print:w-auto"
+                                defaultValue={cs.score ?? ''}
+                                onBlur={(e) => handleScoreUpdate(cs.id, true, Number(e.target.value))}
+                                step="1"
+                              />
+                              <span className="text-xs text-gray-500 font-bold">/ {cs.maxScore}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-[#1e1e1e] rounded-lg border border-gray-800 overflow-hidden mt-3">
+                          <div className="bg-[#2d2d2d] px-4 py-2 border-b border-gray-800 flex justify-between items-center">
+                            <span className="text-xs font-mono text-gray-400">Candidate's Code</span>
+                          </div>
+                          <pre className="p-4 text-sm font-mono text-gray-300 overflow-x-auto whitespace-pre-wrap">
+                            {cs.code || '// No code submitted'}
+                          </pre>
                         </div>
                       </div>
                     ))}

@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // The proxy in vite.config.ts routes /api to http://localhost:5000
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true, // Crucial for sending the HTTP-only JWT cookie
   headers: {
     'Content-Type': 'application/json',

@@ -30,15 +30,25 @@ const CandidatePortal = () => {
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   
   const headerVideoRef = useRef<HTMLVideoElement | null>(null);
-  const headerVideoCallback = (node: HTMLVideoElement | null) => {
+  const headerVideoCallback = React.useCallback((node: HTMLVideoElement | null) => {
     headerVideoRef.current = node;
-    if (node && mediaStreamRef.current) {
+    if (node && mediaStreamRef.current && node.srcObject !== mediaStreamRef.current) {
       node.srcObject = mediaStreamRef.current;
     }
-  };
+  }, []);
+
+  const consentVideoCallback = React.useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node as any;
+    if (node && mediaStreamRef.current && node.srcObject !== mediaStreamRef.current) {
+      node.srcObject = mediaStreamRef.current;
+      node.play().catch(() => {});
+    }
+  }, []);
 
   const [isFullScreen, setIsFullScreen] = useState(true);
   const [showTabWarning, setShowTabWarning] = useState(false);
+  const [showNavigationWarning, setShowNavigationWarning] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   
   const [currentIndex, setCurrentIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState<string>('00:00:00');
@@ -63,11 +73,13 @@ const CandidatePortal = () => {
           setError('This assessment link is no longer valid or has already been completed.');
           setStep('INSTRUCTIONS'); 
         } else {
-          setStep('INSTRUCTIONS');
+          // Skip instructions since they agreed prior to registration
+          setStep('CONSENT');
         }
       } catch (err: any) {
         setError(err.response?.data?.error || 'Failed to verify assessment token.');
-        setStep('INSTRUCTIONS');
+        // Skip instructions since they agreed prior to registration
+        setStep('CONSENT');
       }
     };
     checkToken();
@@ -176,9 +188,36 @@ const CandidatePortal = () => {
     return () => clearInterval(interval);
   }, [session, step]);
 
+  // Prevent Back Navigation
+  useEffect(() => {
+    if (step !== 'TEST') return;
+    
+    // Push a dummy state to history so the back button can be intercepted
+    window.history.pushState(null, '', window.location.href);
+    
+    const handlePopState = () => {
+      setShowNavigationWarning(true);
+      window.history.pushState(null, '', window.location.href); // Push again to trap them
+    };
+    
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "You have an active assessment. Are you sure you want to leave? Your progress will be lost if not submitted.";
+      return e.returnValue;
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [step]);
+
   // 5. Proctoring Integrity Events & Screenshots
   useEffect(() => {
-    if (step !== 'TEST' || !assessment?.isProctored) return;
+    if (step !== 'TEST' || !sessionInfo?.isProctored) return;
 
     const captureScreenshot = (): string | undefined => {
       if (!headerVideoRef.current) return undefined;
@@ -223,17 +262,31 @@ const CandidatePortal = () => {
         setIsFullScreen(true);
       }
     };
+    
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      logEvent('COPY');
+    };
+    
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      logEvent('PASTE');
+    };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('copy', handleCopy);
+    document.addEventListener('paste', handlePaste);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('copy', handleCopy);
+      document.removeEventListener('paste', handlePaste);
     };
-  }, [step, assessment?.isProctored]);
+  }, [step, sessionInfo?.isProctored]);
 
   const requestFullscreenResume = async () => {
     try {
@@ -247,7 +300,7 @@ const CandidatePortal = () => {
   const handlePreventDefault = (e: React.SyntheticEvent) => e.preventDefault();
   const handleCopyPasteEvent = (e: React.ClipboardEvent, type: string) => {
     e.preventDefault();
-    if (assessment?.isProctored && sessionRef.current?.id) {
+    if (sessionInfo?.isProctored && sessionRef.current?.id) {
       const canvas = document.createElement('canvas');
       let screenshot = undefined;
       if (headerVideoRef.current) {
@@ -263,7 +316,7 @@ const CandidatePortal = () => {
     }
   };
 
-  const handleAnswerChange = async (questionId: string, payload: { selectedOptionIds?: string[], textAnswer?: string }) => {
+  const handleAnswerChange = async (questionId: string, payload: { selectedOptionIds?: string[], textAnswer?: string, language?: string }) => {
     setAnswers(prev => ({ ...prev, [questionId]: payload }));
     try {
       await api.post('/session/answer', {
@@ -330,23 +383,19 @@ const CandidatePortal = () => {
   if (step === 'THANK_YOU') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white p-10 rounded-2xl shadow-xl max-w-lg w-full text-center border border-gray-100">
-          <div className="w-20 h-20 bg-success/10 text-success rounded-full flex items-center justify-center mx-auto mb-6">
-            <Check size={40} strokeWidth={3} />
+        <div className="bg-white p-6 rounded-2xl shadow-xl max-w-lg w-full text-center border border-gray-100">
+          <div className="w-16 h-16 bg-success/10 text-success rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check size={32} strokeWidth={3} />
           </div>
-          <h1 className="text-3xl font-bold text-dark mb-4">Assessment Complete!</h1>
-          <p className="text-gray-600 mb-8 text-lg">
+          <h1 className="text-2xl font-bold text-dark mb-3">Assessment Complete!</h1>
+          <p className="text-gray-600 mb-6 text-base">
             Thank you for completing the assessment. Your responses have been successfully recorded and submitted.
           </p>
-          <p className="text-sm text-gray-400 mb-8">
-            You may now close this window or return to the homepage.
-          </p>
-          <button 
-            onClick={() => navigate('/')}
-            className="px-8 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-black transition-colors"
-          >
-            Return to Homepage
-          </button>
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+            <p className="text-blue-800 font-medium">
+              You may now safely close this window or tab.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -360,122 +409,18 @@ const CandidatePortal = () => {
     );
   }
 
-  if (step === 'INSTRUCTIONS') {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-        <div className="max-w-3xl bg-white rounded-2xl shadow-sm border border-gray-200 p-8 w-full">
-          {error ? (
-            <div className="text-center">
-              <AlertTriangle size={48} className="mx-auto text-danger mb-4" />
-              <h1 className="text-2xl font-bold text-dark mb-2">Access Denied</h1>
-              <p className="text-gray-600">{error}</p>
-            </div>
-          ) : (
-            <>
-              <h1 className="text-3xl font-bold text-dark mb-2">{sessionInfo?.title}</h1>
-              <p className="text-gray-500 mb-4 font-medium">Candidate: {sessionInfo?.candidateName}</p>
-              
-              {/* Scheduled date/time block */}
-              {(sessionInfo?.settings?.startDate || sessionInfo?.settings?.endDate) && (
-                <div className="flex flex-wrap gap-4 mb-6">
-                  {sessionInfo?.settings?.startDate && (
-                    <div className="flex items-center space-x-2 bg-blue-50 border border-blue-100 text-blue-800 px-4 py-2 rounded-lg text-sm font-medium">
-                      <Clock size={16} />
-                      <span>Starts: {new Date(sessionInfo.settings.startDate).toLocaleString()}</span>
-                    </div>
-                  )}
-                  {sessionInfo?.settings?.endDate && (
-                    <div className="flex items-center space-x-2 bg-orange-50 border border-orange-100 text-orange-800 px-4 py-2 rounded-lg text-sm font-medium">
-                      <Clock size={16} />
-                      <span>Ends: {new Date(sessionInfo.settings.endDate).toLocaleString()}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              <div className="prose text-gray-700 max-w-none mb-8">
-                <h3 className="text-xl font-bold mb-4">Assessment Instructions & Rules</h3>
-                
-                {sessionInfo?.settings?.instructions && (
-                  <div className="mb-6 whitespace-pre-wrap p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    {sessionInfo.settings.instructions}
-                  </div>
-                )}
-
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 mb-6">
-                  <h4 className="font-bold text-blue-900 mb-2 flex items-center">
-                    <Clock size={18} className="mr-2" /> Timing & Navigation
-                  </h4>
-                  <ul className="list-disc pl-5 space-y-1 text-sm text-blue-800">
-                    <li>The timer will begin as soon as you click start.</li>
-                    <li>You can navigate between questions freely using the panel on the left.</li>
-                    <li>Your answers are automatically saved as you select them.</li>
-                    <li>The test will auto-submit when the timer runs out.</li>
-                  </ul>
-                </div>
-
-                {sessionInfo?.isProctored && (
-                  <div className="bg-warning/10 border border-warning/20 rounded-xl p-5">
-                    <h4 className="font-bold text-warning-dark mb-2 flex items-center">
-                      <ShieldAlert size={18} className="mr-2" /> Proctoring Rules
-                    </h4>
-                    <ul className="list-disc pl-5 space-y-1 text-sm text-yellow-800">
-                      <li>You must remain in <strong>Full-Screen mode</strong> at all times.</li>
-                      <li>Camera and Microphone are strictly monitored and screenshots will be captured if violations occur.</li>
-                      <li>Do not switch tabs or minimize the browser window.</li>
-                      <li>Copying, pasting, and highlighting text is strictly disabled.</li>
-                    </ul>
-                  </div>
-                )}
-
-                {sessionInfo?.settings?.rules && (
-                  <div className="mt-6 p-4 bg-red-50 text-red-900 rounded-lg border border-red-200 whitespace-pre-wrap">
-                    <h4 className="font-bold mb-2">Additional Strict Rules</h4>
-                    {sessionInfo.settings.rules}
-                  </div>
-                )}
-              </div>
-              
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 mb-8">
-                <label className="flex items-start space-x-3 cursor-pointer">
-                  <input 
-                    type="checkbox"
-                    checked={termsAgreed}
-                    onChange={(e) => setTermsAgreed(e.target.checked)}
-                    className="mt-1 w-5 h-5 text-primary focus:ring-primary rounded border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700 font-medium">
-                    I have read and agree to the strict terms and conditions of this assessment. 
-                    I understand that my activity will be monitored and any attempt to violate the rules will result in immediate disqualification.
-                  </span>
-                </label>
-              </div>
-              
-              <button 
-                onClick={() => setStep('CONSENT')}
-                disabled={!termsAgreed}
-                className="w-full bg-primary hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold transition-all flex items-center justify-center shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Proceed
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   if (step === 'CONSENT') {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-        <div className="max-w-2xl bg-white rounded-2xl shadow-sm border border-gray-200 p-8 w-full">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-3">
+        <div className="max-w-2xl bg-white rounded-xl shadow-sm border border-gray-200 p-5 w-full">
           <>
-            <h1 className="text-2xl font-bold text-dark mb-1">System Readiness Check</h1>
-            <p className="text-gray-500 mb-6">We need to verify your system is ready for the assessment.</p>
+            <h1 className="text-xl font-bold text-dark mb-1">System Readiness Check</h1>
+            <p className="text-gray-500 mb-4 text-sm">We need to verify your system is ready for the assessment.</p>
             
             {error && (
-              <div className="mb-6 bg-danger/10 border border-danger/20 text-danger p-4 rounded-xl flex items-center space-x-3">
-                <AlertTriangle size={24} />
+              <div className="mb-4 bg-danger/10 border border-danger/20 text-danger p-3 rounded-lg flex items-center space-x-2 text-sm">
+                <AlertTriangle size={20} />
                 <p className="font-bold">{error}</p>
               </div>
             )}
@@ -498,13 +443,13 @@ const CandidatePortal = () => {
                     <p className="text-sm text-gray-500 mb-4">We need to verify your camera and microphone are working.</p>
                     
                     {permissionError && (
-                      <p className="text-sm text-danger mb-4 bg-danger/10 p-2 rounded">{permissionError}</p>
+                      <p className="text-xs text-danger mb-3 bg-danger/10 p-2 rounded">{permissionError}</p>
                     )}
                     
                     <button 
                       onClick={requestPermissions}
                       disabled={checkingPermissions}
-                      className="bg-dark hover:bg-black text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center space-x-2 mx-auto"
+                      className="bg-dark hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center space-x-2 mx-auto"
                     >
                       {checkingPermissions && <Loader2 size={16} className="animate-spin" />}
                       <span>Grant Camera & Mic Access</span>
@@ -512,17 +457,17 @@ const CandidatePortal = () => {
                   </div>
                 ) : (
                   <div className="mb-8 flex flex-col items-center p-6 border border-success/20 rounded-xl bg-success/5">
-                    <div className="w-64 h-48 bg-black rounded-lg overflow-hidden mb-4 border-2 border-success shadow-sm">
+                    <div className="w-48 h-36 bg-black rounded-lg overflow-hidden mb-3 border border-success shadow-sm">
                       <video 
-                        ref={videoRef} 
+                        ref={consentVideoCallback} 
                         autoPlay 
                         playsInline 
                         muted 
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <div className="text-success text-center font-bold flex items-center justify-center space-x-2">
-                      <ShieldAlert size={20} />
+                    <div className="text-success text-center font-bold flex items-center justify-center space-x-2 text-sm">
+                      <ShieldAlert size={16} />
                       <span>System checks passed. Hardware is working.</span>
                     </div>
                   </div>
@@ -533,7 +478,7 @@ const CandidatePortal = () => {
             <button 
               onClick={handleStart}
               disabled={loading || (sessionInfo?.isProctored && !permissionsGranted)}
-              className="w-full bg-primary hover:bg-blue-700 text-white px-6 py-3.5 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-md hover:shadow-lg"
+              className="w-full bg-primary hover:bg-blue-700 text-white px-5 py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-sm hover:shadow"
             >
               {loading ? <Loader2 className="animate-spin" /> : null}
               <span>{loading ? 'Starting...' : 'I Understand & Start Assessment'}</span>
@@ -580,8 +525,8 @@ const CandidatePortal = () => {
                   top: `${row * 20 - 5}%`,
                   left: `${col * 25 - 5}%`,
                   transform: 'rotate(-30deg)',
-                  opacity: 0.07,
-                  fontSize: '12px',
+                  opacity: 0.08,
+                  fontSize: '24px',
                   fontWeight: 700,
                   color: '#000',
                   whiteSpace: 'nowrap',
@@ -597,12 +542,12 @@ const CandidatePortal = () => {
       )}
 
       {/* Full Screen Enforcement Overlay */}
-      {assessment?.isProctored && !isFullScreen && (
-        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
-          <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-lg w-full flex flex-col items-center">
-            <AlertTriangle size={64} className="text-danger mb-4" />
-            <h2 className="text-2xl font-bold text-dark mb-2">Full Screen Exited</h2>
-            <p className="text-gray-600 mb-6 text-lg">
+      {sessionInfo?.isProctored && !isFullScreen && (
+        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center">
+          <div className="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full flex flex-col items-center">
+            <AlertTriangle size={48} className="text-danger mb-3" />
+            <h2 className="text-xl font-bold text-dark mb-2">Full Screen Exited</h2>
+            <p className="text-gray-600 mb-5 text-sm">
               You have left full-screen mode. This is a violation of the proctoring rules and your screen has been flagged. 
               You must return to full-screen mode to resume the assessment.
             </p>
@@ -618,14 +563,14 @@ const CandidatePortal = () => {
       )}
 
       {/* Tab Warning Overlay */}
-      {showTabWarning && assessment?.isProctored && (
-        <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
-          <div className="bg-white p-10 rounded-3xl shadow-2xl max-w-lg w-full flex flex-col items-center border-4 border-danger">
-            <div className="w-20 h-20 bg-danger/10 text-danger rounded-full flex items-center justify-center mb-6">
-              <AlertTriangle size={48} />
+      {showTabWarning && sessionInfo?.isProctored && (
+        <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-md w-full flex flex-col items-center border-4 border-danger">
+            <div className="w-16 h-16 bg-danger/10 text-danger rounded-full flex items-center justify-center mb-4">
+              <AlertTriangle size={36} />
             </div>
-            <h2 className="text-3xl font-bold text-dark mb-4">Warning: Activity Logged</h2>
-            <p className="text-gray-600 mb-8 text-lg font-medium">
+            <h2 className="text-xl font-bold text-dark mb-3">Warning: Activity Logged</h2>
+            <p className="text-gray-600 mb-5 text-sm font-medium">
               You have switched tabs or lost focus on this window. This is a strict violation of the assessment rules.
               Your action has been recorded and flagged for review. Repeated violations may result in immediate disqualification.
             </p>
@@ -639,20 +584,78 @@ const CandidatePortal = () => {
         </div>
       )}
 
+      {/* Navigation Warning Overlay */}
+      {showNavigationWarning && (
+        <div className="absolute inset-0 z-[70] bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center">
+          <div className="bg-white p-10 rounded-2xl shadow-2xl max-w-md w-full flex flex-col items-center border-2 border-warning">
+            <div className="w-16 h-16 bg-warning/10 text-warning-dark rounded-full flex items-center justify-center mb-4">
+              <AlertTriangle size={32} />
+            </div>
+            <h2 className="text-xl font-bold text-dark mb-2">Navigation Blocked</h2>
+            <p className="text-gray-600 mb-6 font-medium">
+              You cannot go back during an active assessment. If you have finished the assessment, please click "Submit".
+            </p>
+            <div className="flex flex-col space-y-3 w-full">
+              <button 
+                onClick={() => setShowNavigationWarning(false)}
+                className="bg-gray-100 hover:bg-gray-200 text-dark px-6 py-3 rounded-xl font-bold transition-colors w-full"
+              >
+                Continue Assessment
+              </button>
+              <button 
+                onClick={() => {
+                  setShowNavigationWarning(false);
+                  handleSubmit();
+                }}
+                className="bg-success hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold transition-colors w-full"
+              >
+                Submit Assessment Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submit Confirmation Overlay */}
+      {showSubmitConfirm && (
+        <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full border border-gray-200 animate-fade-in-up">
+            <h2 className="text-xl font-bold text-dark mb-3">Submit Assessment?</h2>
+            <p className="text-gray-600 mb-6 text-sm">
+              Are you sure you want to submit your assessment? You will not be able to change your answers after submission.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button 
+                onClick={() => setShowSubmitConfirm(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => { setShowSubmitConfirm(false); handleSubmit(); }}
+                className="bg-success hover:bg-green-700 text-white px-5 py-2 rounded-lg font-bold shadow-md transition-colors text-sm"
+              >
+                Yes, Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center sticky top-0 z-10 shadow-sm h-20">
+      <header className="bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center sticky top-0 z-10 shadow-sm h-14">
         <div className="flex-1">
-          <h1 className="text-lg font-bold text-dark truncate pr-4">{assessment?.title}</h1>
+          <h1 className="text-base font-bold text-dark truncate pr-4">{assessment?.title}</h1>
         </div>
         
-        <div className="flex items-center space-x-6">
-          <div className="flex items-center text-warning font-mono bg-warning/10 px-4 py-2 rounded-lg font-bold text-lg">
-            <Clock size={20} className="mr-2" />
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center text-warning font-mono bg-warning/10 px-3 py-1.5 rounded-lg font-bold text-base">
+            <Clock size={16} className="mr-2" />
             {timeLeft}
           </div>
           
-          {assessment?.isProctored && (
-            <div className="w-24 h-16 bg-black rounded overflow-hidden border border-gray-300 shadow-sm flex-shrink-0">
+          {sessionInfo?.isProctored && (
+            <div className="w-20 h-10 bg-black rounded overflow-hidden border border-gray-300 shadow-sm flex-shrink-0">
               <video 
                 ref={headerVideoCallback} 
                 autoPlay 
@@ -663,24 +666,24 @@ const CandidatePortal = () => {
             </div>
           )}
           
-          <button onClick={handleSubmit} className="bg-success hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-bold transition-colors shadow-sm flex-shrink-0">
+          <button onClick={() => setShowSubmitConfirm(true)} className="bg-success hover:bg-green-700 text-white px-5 py-1.5 text-sm rounded-lg font-bold transition-colors shadow-sm flex-shrink-0">
             Submit
           </button>
         </div>
       </header>
 
       {/* Main content */}
-      <div className={`flex-1 flex max-w-screen-2xl mx-auto w-full p-6 gap-6 ${(!isFullScreen && assessment?.isProctored) ? 'pointer-events-none opacity-50' : ''}`}>
+      <div className={`flex-1 flex max-w-screen-2xl mx-auto w-full p-4 gap-4 ${(!isFullScreen && sessionInfo?.isProctored) ? 'pointer-events-none opacity-50' : ''}`}>
         
         {/* Left Navigation */}
-        <div className="w-72 bg-white rounded-xl shadow-sm border border-gray-200 p-4 h-fit sticky top-28 overflow-y-auto max-h-[calc(100vh-8rem)]">
+        <div className="w-64 bg-white rounded-xl shadow-sm border border-gray-200 p-3 h-fit sticky top-20 overflow-y-auto max-h-[calc(100vh-5rem)]">
           {Object.entries(sectionsObj).map(([secTitle, qList], secIdx) => (
             <div key={secIdx} className="mb-6 last:mb-0">
               <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase tracking-wider bg-gray-50 px-2 py-1 rounded">
                 {secTitle}
               </h3>
               <div className="grid grid-cols-5 gap-2">
-                {qList.map((q) => {
+                {(qList as any[]).map((q: any) => {
                   const ans = answers[q.id];
                   const isAnswered = ans && (ans.selectedOptionIds?.length > 0 || !!ans.textAnswer);
                   const isCurrent = q.originalIndex === currentIndex;
@@ -706,16 +709,16 @@ const CandidatePortal = () => {
         {/* Question Area */}
         {currentQ ? (
           currentQ.isCoding ? (
-            <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex overflow-hidden max-h-[calc(100vh-8rem)]">
+            <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex overflow-hidden max-h-[calc(100vh-5rem)]">
               {/* Split Left: Description */}
-              <div className="w-1/3 p-6 border-r border-gray-200 overflow-y-auto bg-gray-50 flex flex-col relative">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-bold text-dark">Question {currentIndex + 1}</h2>
-                  <span className="text-xs font-bold text-white bg-primary px-2 py-1 rounded">CODING</span>
+              <div className="w-1/3 p-4 border-r border-gray-200 overflow-y-auto bg-gray-50 flex flex-col relative">
+                <div className="flex justify-between items-center mb-3">
+                  <h2 className="text-lg font-bold text-dark">Question {currentIndex + 1}</h2>
+                  <span className="text-[10px] font-bold text-white bg-primary px-2 py-0.5 rounded">CODING</span>
                 </div>
                 
-                <h3 className="text-lg font-bold mb-4">{currentQ.title}</h3>
-                <div className="prose max-w-none text-gray-700 text-sm mb-6 whitespace-pre-wrap">
+                <h3 className="text-base font-bold mb-3">{currentQ.title}</h3>
+                <div className="prose max-w-none text-gray-700 text-xs mb-4 whitespace-pre-wrap">
                   {currentQ.description}
                 </div>
                 
@@ -835,19 +838,19 @@ const CandidatePortal = () => {
               </div>
             </div>
           ) : (
-            <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-8 flex flex-col max-w-4xl">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-dark">Question {currentIndex + 1}</h2>
-                <span className="text-sm font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+            <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold text-dark">Question {currentIndex + 1}</h2>
+                <span className="text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
                   {currentQ.type.replace('_', ' ')}
                 </span>
               </div>
               
-              <div className="prose max-w-none text-dark mb-8 text-lg">
+              <div className="prose max-w-none text-dark mb-6 text-base">
                 <p className="font-medium">{currentQ.text}</p>
               </div>
               
-              <div className="space-y-4 flex-1 flex flex-col">
+              <div className="space-y-3 flex-1 flex flex-col">
 
             {!currentQ.isCoding && currentQ.type === 'SINGLE_CHOICE' && currentQ.options?.map((opt: any) => (
               <label key={opt.id} className="flex items-center p-4 border border-gray-200 rounded-xl cursor-pointer hover:border-primary/50 transition-all bg-gray-50 hover:bg-white group">
@@ -918,22 +921,29 @@ const CandidatePortal = () => {
             )}
           </div>
           
-              <div className="flex justify-between items-center mt-10 pt-6 border-t border-gray-100">
+              <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
                 <button 
                   onClick={() => { setCurrentIndex(prev => Math.max(0, prev - 1)); setExecutionResults([]); }}
                   disabled={currentIndex === 0}
-                  className="px-8 py-3 border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-colors disabled:opacity-50 text-sm"
                 >
                   Previous
                 </button>
-                
-                <button 
-                  onClick={() => { setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1)); setExecutionResults([]); }}
-                  disabled={currentIndex === questions.length - 1}
-                  className="bg-dark hover:bg-black text-white px-10 py-3 rounded-xl font-bold transition-colors disabled:opacity-50 shadow-md"
-                >
-                  Next
-                </button>
+                {currentIndex === questions.length - 1 ? (
+                  <button 
+                    onClick={() => setShowSubmitConfirm(true)}
+                    className="bg-success hover:bg-green-700 text-white px-8 py-2 rounded-xl font-bold transition-colors shadow-sm text-sm"
+                  >
+                    Submit Assessment
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => { setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1)); setExecutionResults([]); }}
+                    className="bg-dark hover:bg-black text-white px-8 py-2 rounded-xl font-bold transition-colors shadow-sm text-sm"
+                  >
+                    Next
+                  </button>
+                )}
               </div>
             </div>
           )

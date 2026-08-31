@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Save, Plus, Trash2, Loader2, Upload, Settings, ListTree, CalendarClock, Play, Square, Link as LinkIcon, Check, X, BarChart3 } from 'lucide-react';
+import { Save, Plus, Trash2, Loader2, Upload, Settings, ListTree, CalendarClock, Play, Square, Link as LinkIcon, Check, X, BarChart3, Edit } from 'lucide-react';
 import api from '../../lib/axios';
 import InlineQuestionEditor from './InlineQuestionEditor';
 import ResultsView from './ResultsView';
@@ -26,7 +26,7 @@ const AssessmentEditor = () => {
   
   const [allQuestions, setAllQuestions] = useState<any[]>([]);
   const [showQuestionModal, setShowQuestionModal] = useState<number | null>(null);
-  const [showInlineEditor, setShowInlineEditor] = useState<number | null>(null);
+  const [showInlineEditor, setShowInlineEditor] = useState<{ sectionIdx?: number; data?: any } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeCsvSection, setActiveCsvSection] = useState<number | null>(null);
   
@@ -45,8 +45,8 @@ const AssessmentEditor = () => {
           setTitle(res.data.title);
           setDescription(res.data.description || '');
           
-          if (res.data.startDate) setStartDate(res.data.startDate.split('T')[0]);
-          if (res.data.endDate) setEndDate(res.data.endDate.split('T')[0]);
+          if (res.data.startDate) setStartDate(new Date(new Date(res.data.startDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+          if (res.data.endDate) setEndDate(new Date(new Date(res.data.endDate).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16));
           setStatus(res.data.status);
           
           if (res.data.sections && res.data.sections.length > 0) {
@@ -132,13 +132,26 @@ const AssessmentEditor = () => {
     setSections(newSecs);
   };
   const handleInlineSave = (questionId: string) => {
-    if (showInlineEditor !== null) {
+    if (showInlineEditor?.sectionIdx !== undefined) {
       const newSecs = [...sections];
-      newSecs[showInlineEditor].questionIds.push(questionId);
+      if (!newSecs[showInlineEditor.sectionIdx].questionIds.includes(questionId)) {
+        newSecs[showInlineEditor.sectionIdx].questionIds.push(questionId);
+      }
       setSections(newSecs);
-      api.get('/questions').then(res => setAllQuestions(res.data)).catch(console.error);
     }
+    api.get('/questions').then(res => setAllQuestions(res.data)).catch(console.error);
     setShowInlineEditor(null);
+  };
+  const handleRemoveQuestionFromSection = (sectionIndex: number, questionId: string) => {
+    const newSecs = [...sections];
+    newSecs[sectionIndex].questionIds = newSecs[sectionIndex].questionIds.filter(id => id !== questionId);
+    setSections(newSecs);
+  };
+  const handleEditQuestionInSection = (questionId: string) => {
+    const qObj = allQuestions.find(q => q.id === questionId);
+    if (qObj) {
+      setShowInlineEditor({ data: qObj });
+    }
   };
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || activeCsvSection === null) return;
@@ -293,7 +306,7 @@ const AssessmentEditor = () => {
                 <div className="p-6">
                   <div className="flex flex-wrap gap-3 mb-6">
                     <button onClick={() => setShowQuestionModal(i)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">Select from Bank</button>
-                    <button onClick={() => setShowInlineEditor(i)} className="px-4 py-2 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 rounded-lg text-sm font-bold transition-colors flex items-center"><Plus size={16} className="mr-1" /> Create Question</button>
+                    <button onClick={() => setShowInlineEditor({ sectionIdx: i })} className="px-4 py-2 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 rounded-lg text-sm font-bold transition-colors flex items-center"><Plus size={16} className="mr-1" /> Create Question</button>
                     <button onClick={() => { setActiveCsvSection(i); fileInputRef.current?.click(); }} className="px-4 py-2 bg-gray-800 text-white hover:bg-black rounded-lg text-sm font-medium transition-colors flex items-center"><Upload size={16} className="mr-1" /> Import CSV</button>
                   </div>
                   
@@ -307,7 +320,23 @@ const AssessmentEditor = () => {
                               <span className="font-bold text-gray-400 mr-2 text-xs">Q{idx+1}</span>
                               <span className="text-sm font-medium text-dark truncate">{qObj ? qObj.title || qObj.text : qId}</span>
                             </div>
-                            <span className="text-xs px-2 py-1 bg-white border border-gray-200 rounded text-gray-500 font-bold whitespace-nowrap">{qObj ? (qObj.marks + ' M') : ''}</span>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs px-2 py-1 bg-white border border-gray-200 rounded text-gray-500 font-bold whitespace-nowrap">{qObj ? (qObj.marks + ' M') : ''}</span>
+                              <button
+                                onClick={() => handleEditQuestionInSection(qId)}
+                                className="p-1 text-gray-400 hover:text-primary hover:bg-blue-50 rounded"
+                                title="Edit Question"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleRemoveQuestionFromSection(i, qId)}
+                                className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                title="Remove from Section"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
                         );
                       })}
@@ -327,12 +356,12 @@ const AssessmentEditor = () => {
             <h2 className="text-xl font-bold text-dark mb-6">Deployment Controls</h2>
             <div className="grid grid-cols-2 gap-8 mb-10">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Available From Date</label>
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <label className="block text-sm font-bold text-gray-700 mb-2">Available From (Date & Time)</label>
+                <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Expiration Date</label>
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                <label className="block text-sm font-bold text-gray-700 mb-2">Expiration Date & Time</label>
+                <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20" />
               </div>
             </div>
             <div className="border-t border-gray-200 pt-8 flex items-center justify-between">
@@ -343,11 +372,11 @@ const AssessmentEditor = () => {
               <div className="flex space-x-4">
                 <button onClick={() => handleSave('DRAFT')} className={`px-6 py-3 rounded-xl font-bold flex items-center space-x-2 transition-all ${status !== 'PUBLISHED' ? 'bg-gray-200 text-gray-800 shadow-inner' : 'bg-white border-2 border-gray-200 text-gray-500 hover:border-gray-400'}`}>
                   <Square size={20} className={status !== 'PUBLISHED' ? 'text-gray-800' : ''} />
-                  <span>Stopped / Draft</span>
+                  <span>Stop Assessment</span>
                 </button>
                 <button onClick={() => handleSave('PUBLISHED')} disabled={sections.length === 0 || sections[0].questionIds.length === 0} className={`px-8 py-3 rounded-xl font-bold flex items-center space-x-2 transition-all ${status === 'PUBLISHED' ? 'bg-success text-white shadow-md' : 'bg-white border-2 border-success/30 text-success hover:bg-success/10'}`}>
                   <Play size={20} fill={status === 'PUBLISHED' ? "white" : "none"} />
-                  <span>Deploy / Active</span>
+                  <span>Start Assessment</span>
                 </button>
               </div>
             </div>
@@ -407,6 +436,8 @@ const AssessmentEditor = () => {
       {showInlineEditor !== null && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <InlineQuestionEditor 
+            initialData={showInlineEditor.data}
+            sectionId={showInlineEditor.sectionIdx !== undefined ? id : undefined}
             onSave={handleInlineSave}
             onCancel={() => setShowInlineEditor(null)}
           />

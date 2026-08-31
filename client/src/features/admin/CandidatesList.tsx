@@ -81,6 +81,16 @@ const CandidatesList = () => {
     }
   };
 
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete candidate "${name}"? This action cannot be undone.`)) return;
+    try {
+      await api.delete(`/candidates/${id}`);
+      setCandidates(prev => prev.filter(c => c.id !== id));
+    } catch (err) {
+      alert("Failed to delete candidate.");
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
@@ -206,10 +216,14 @@ const CandidatesList = () => {
               <tr key={c.id}>
                 <td>
                   <div className="flex items-center space-x-3">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                      {c.name?.charAt(0)?.toUpperCase()}
-                    </div>
+                    {c.photo ? (
+                      <img src={c.photo} alt={c.name} className="w-9 h-9 rounded-full object-cover shadow-sm border border-gray-200 flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                        {c.name?.charAt(0)?.toUpperCase()}
+                      </div>
+                    )}
                     <div>
                       <div className="font-semibold text-dark">{c.name}</div>
                       <div className="text-xs text-slate-400">{c.email}</div>
@@ -232,7 +246,7 @@ const CandidatesList = () => {
                         Reset Test
                       </button>
                     )}
-                    <button className="p-2 rounded-lg text-slate-400 hover:text-danger hover:bg-red-50 transition-colors">
+                    <button onClick={() => handleDelete(c.id, c.name)} className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
                       <Trash2 size={16} />
                     </button>
                   </div>

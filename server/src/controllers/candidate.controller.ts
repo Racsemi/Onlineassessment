@@ -137,7 +137,7 @@ export const importCandidatesCsv = async (req: Request, res: Response) => {
 
 export const registerPublicCandidate = async (req: Request, res: Response) => {
   try {
-    const { assessmentId, name, email, phone, college, branch, cgpa, customFields } = req.body;
+    const { assessmentId, name, email, phone, college, branch, cgpa, photo, customFields } = req.body;
     
     const assessment = await prisma.assessment.findUnique({ where: { id: assessmentId } });
     if (!assessment) return res.status(404).json({ error: 'Assessment not found' });
@@ -146,8 +146,8 @@ export const registerPublicCandidate = async (req: Request, res: Response) => {
 
     const candidate = await prisma.candidate.upsert({
       where: { email_assessmentId: { email, assessmentId } },
-      update: { name, phone, college, branch, cgpa: parsedCgpa, customFields: customFields || {} },
-      create: { assessmentId, name, email, phone, college, branch, cgpa: parsedCgpa, customFields: customFields || {} }
+      update: { name, phone, college, branch, cgpa: parsedCgpa, photo, customFields: customFields || {} },
+      create: { assessmentId, name, email, phone, college, branch, cgpa: parsedCgpa, photo, customFields: customFields || {} }
     });
     
     const token = crypto.randomBytes(32).toString('hex');
@@ -185,5 +185,15 @@ export const resetTest = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Reset test error:', error);
     res.status(500).json({ error: 'Failed to reset test' });
+  }
+};
+
+export const deleteCandidate = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.candidate.delete({ where: { id } });
+    res.json({ message: 'Candidate deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete candidate' });
   }
 };

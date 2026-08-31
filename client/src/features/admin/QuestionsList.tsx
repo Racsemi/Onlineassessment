@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Filter, Trash2, Edit, Upload, X, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, Edit, Upload, X, CheckCircle, AlertTriangle, Loader2, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../lib/axios';
 
@@ -24,6 +24,16 @@ const QuestionsList = () => {
       console.error("Failed to fetch questions");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string, type: string) => {
+    if (!window.confirm("Are you sure you want to delete this question?")) return;
+    try {
+      await api.delete(`/questions/${id}?type=${type}`);
+      setQuestions(prev => prev.filter(q => q.id !== id));
+    } catch (err) {
+      alert("Failed to delete question.");
     }
   };
 
@@ -81,8 +91,12 @@ const QuestionsList = () => {
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-start mb-8">
         <div>
+          <Link to="/admin" className="text-gray-500 hover:text-dark flex items-center space-x-2 text-sm font-medium mb-3 transition-colors">
+            <ArrowLeft size={16} />
+            <span>Back to Dashboard</span>
+          </Link>
           <h1 className="text-3xl font-bold text-dark">Question Bank</h1>
           <p className="text-gray-500 mt-1">Manage reusable questions for assessments</p>
         </div>
@@ -158,11 +172,11 @@ const QuestionsList = () => {
                 </td>
                 <td className="px-6 py-4 text-gray-600">{q.category}</td>
                 <td className="px-6 py-4 text-gray-600">{q.marks}</td>
-                <td className="px-6 py-4 text-right space-x-2">
-                  <button className="text-gray-400 hover:text-primary transition-colors p-2 rounded-lg hover:bg-gray-100">
+                <td className="px-6 py-4 text-right space-x-2 flex justify-end">
+                  <Link to={`/admin/questions/${q.id}`} className="block text-gray-400 hover:text-primary transition-colors p-2 rounded-lg hover:bg-gray-100">
                     <Edit size={18} />
-                  </button>
-                  <button className="text-gray-400 hover:text-danger transition-colors p-2 rounded-lg hover:bg-gray-100">
+                  </Link>
+                  <button onClick={() => handleDelete(q.id, q.type)} className="text-gray-400 hover:text-danger transition-colors p-2 rounded-lg hover:bg-gray-100">
                     <Trash2 size={18} />
                   </button>
                 </td>
@@ -202,20 +216,27 @@ const QuestionsList = () => {
                   <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                     <h3 className="font-semibold text-blue-800 mb-2">CSV Format Requirements</h3>
                     <p className="text-sm text-blue-700 mb-3">Your CSV file must include exactly these headers in the first row. Download a sample file to get started quickly:</p>
-                    <div className="flex gap-3 mb-4">
+                    <div className="flex flex-wrap gap-3 mb-4">
                       <a 
-                        href="/sample_mcq_questions.csv" 
+                        href="/sample_single_choice.csv" 
                         download
                         className="flex items-center space-x-2 bg-white border border-blue-300 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
                       >
-                        <span>⬇️ Sample MCQ CSV</span>
+                        <span>⬇️ Single Choice CSV</span>
+                      </a>
+                      <a 
+                        href="/sample_multiple_choice.csv" 
+                        download
+                        className="flex items-center space-x-2 bg-white border border-teal-300 text-teal-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-teal-100 transition-colors"
+                      >
+                        <span>⬇️ Multiple Choice CSV</span>
                       </a>
                       <a 
                         href="/sample_coding_questions.csv" 
                         download
                         className="flex items-center space-x-2 bg-white border border-purple-300 text-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-purple-100 transition-colors"
                       >
-                        <span>⬇️ Sample Coding CSV</span>
+                        <span>⬇️ Coding CSV</span>
                       </a>
                     </div>
                     <div className="overflow-x-auto">

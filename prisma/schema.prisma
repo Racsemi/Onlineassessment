@@ -109,6 +109,7 @@ model CodingQuestion {
   allowedLanguages String[]   // e.g. ["PYTHON", "JAVA", "CPP", "JS"]
   
   testCases       TestCase[]
+  submissions     CodingSubmission[]
   
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -135,6 +136,7 @@ model Candidate {
   college       String?
   branch        String?
   cgpa          Float?
+  photo         String?      @db.Text
   customFields  Json?
   
   sessions      CandidateSession[]
@@ -196,6 +198,7 @@ model CodingSubmission {
   sessionId       String
   session         CandidateSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   codingQuestionId String
+  codingQuestion   CodingQuestion @relation(fields: [codingQuestionId], references: [id], onDelete: Cascade)
   
   language        String
   code            String

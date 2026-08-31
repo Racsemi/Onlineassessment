@@ -93,7 +93,7 @@ const Login = () => {
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
                   className="form-input pl-10"
-                  placeholder="admin@racsemi.com" />
+                  placeholder="name@company.com" />
               </div>
             </div>
 

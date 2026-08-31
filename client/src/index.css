@@ -42,6 +42,12 @@
     font-family: 'Inter', system-ui, sans-serif;
   }
 
+  .ql-editor {
+    min-height: 200px;
+    font-family: inherit;
+    font-size: 1rem;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -138,19 +144,20 @@
 
   /* --- Stat/KPI card --- */
   .stat-card {
-    @apply card p-6;
+    @apply bg-white rounded-2xl border border-slate-100 shadow-sm p-6;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
   }
 
   /* --- Badge / pill --- */
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
-  .badge-success { @apply badge bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200; }
-  .badge-warning { @apply badge bg-amber-50 text-amber-700 ring-1 ring-amber-200; }
-  .badge-danger  { @apply badge bg-red-50 text-red-700 ring-1 ring-red-200; }
-  .badge-info    { @apply badge bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200; }
-  .badge-neutral { @apply badge bg-slate-100 text-slate-600 ring-1 ring-slate-200; }
-  .badge-primary { @apply badge bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200; }
+  .badge-success { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200; }
+  .badge-warning { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-200; }
+  .badge-danger  { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-200; }
+  .badge-info    { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200; }
+  .badge-neutral { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-slate-100 text-slate-600 ring-1 ring-slate-200; }
+  .badge-primary { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200; }
 
   /* --- Table --- */
   .data-table thead tr {
@@ -215,6 +222,51 @@
   .animate-fade-in-up {
     animation: fadeInUp 0.35s ease forwards;
   }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Reset height/overflow for html and body */
+  html, body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+  
+  #printable-modal, #printable-modal * {
+    visibility: visible;
+  }
+  
+  #printable-modal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  
+  .print-hide {
+    display: none !important;
+  }
+  
+  /* Hide the modal overlay background and reset its positioning to avoid cropping */
+  .fixed.inset-0.bg-black\/60 {
+    background: transparent !important;
+    position: static !important;
+    overflow: visible !important;
+    display: block !important;
+    align-items: flex-start !important;
+  }
+}
 
   /* --- Glow ring for proctoring indicators --- */
   .ring-glow-danger {

@@ -85,6 +85,28 @@ const FeatureToggles: React.FC<FeatureTogglesProps> = ({ isProctored, setIsProct
             <input type="checkbox" checked={features.rightClick} onChange={() => toggleFeature('rightClick')} className="w-5 h-5 text-primary rounded border-gray-300" />
           </div>
 
+          <div className="border border-gray-200 rounded-xl p-4 flex justify-between items-center hover:bg-gray-50 transition-colors">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-yellow-100 text-yellow-600 rounded-lg"><ShieldAlert size={20} /></div>
+              <div>
+                <p className="font-bold text-dark text-sm">Tab Tracking & Strict Focus</p>
+                <p className="text-xs text-gray-500">Flag candidate when they switch tabs or minimize window.</p>
+              </div>
+            </div>
+            <input type="checkbox" checked={features.tabTracking} onChange={() => toggleFeature('tabTracking')} className="w-5 h-5 text-primary rounded border-gray-300" />
+          </div>
+
+          <div className="border border-gray-200 rounded-xl p-4 flex justify-between items-center hover:bg-gray-50 transition-colors">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><Keyboard size={20} /></div>
+              <div>
+                <p className="font-bold text-dark text-sm">Keyboard Shortcuts</p>
+                <p className="text-xs text-gray-500">Allow keyboard shortcuts during the assessment.</p>
+              </div>
+            </div>
+            <input type="checkbox" checked={features.keyboardShortcuts} onChange={() => toggleFeature('keyboardShortcuts')} className="w-5 h-5 text-primary rounded border-gray-300" />
+          </div>
+
         </div>
       </div>
     </div>

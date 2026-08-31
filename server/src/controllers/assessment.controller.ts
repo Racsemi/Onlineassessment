@@ -135,6 +135,13 @@ export const getAssessmentResults = async (req: Request, res: Response) => {
             sessions: {
               include: { 
                 integrityEvents: true,
+                answers: {
+                  include: { 
+                    question: {
+                      include: { options: true }
+                    }
+                  }
+                },
                 codingAnswers: {
                   include: { codingQuestion: true }
                 }
@@ -149,23 +156,45 @@ export const getAssessmentResults = async (req: Request, res: Response) => {
     const mapped = results.map(r => {
       const session = r.candidate.sessions[0];
       const codingSubmissions = (session?.codingAnswers || []).map((ca: any) => ({
+        id: ca.id,
         questionTitle: ca.codingQuestion?.title,
         language: ca.language,
         status: ca.status,
         score: ca.score,
-        maxScore: ca.codingQuestion?.marks || 10
+        maxScore: ca.codingQuestion?.marks || 10,
+        code: ca.code
       }));
+
+      const standardAnswers = (session?.answers || []).map((ans: any) => {
+        let responseText = ans.textAnswer || '';
+        if (ans.selectedOptionIds && ans.selectedOptionIds.length > 0) {
+          const selectedOpts = ans.question.options.filter((o: any) => ans.selectedOptionIds.includes(o.id));
+          responseText = selectedOpts.map((o: any) => o.text).join(', ');
+        }
+        return {
+          id: ans.id,
+          questionText: ans.question.text,
+          type: ans.question.type,
+          response: responseText,
+          score: ans.score,
+          maxScore: ans.question.marks
+        };
+      });
+
       return {
         id: r.id,
         name: r.candidate.name,
         email: r.candidate.email,
+        photo: r.candidate.photo,
+        customFields: r.candidate.customFields,
         score: r.totalScore,
         maxScore: r.maxScore,
         percentage: r.percentage,
         status: session?.status === 'COMPLETED' ? 'EVALUATED' : session?.status || r.status,
         integrityEventsCount: session?.integrityEvents?.length || 0,
         integrityEvents: session?.integrityEvents || [],
-        codingSubmissions
+        codingSubmissions,
+        standardAnswers
       };
     });
     
@@ -192,5 +221,74 @@ export const getPublicAssessment = async (req: Request, res: Response) => {
     res.json({ ...assessment, settings });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch public assessment details' });
+  }
+};
+
+export const deleteAssessment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.assessment.delete({ where: { id } });
+    res.json({ message: 'Assessment deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete assessment' });
+  }
+};
+
+export const updateResultStatus = async (req: Request, res: Response) => {
+  try {
+    const { resultId } = req.params;
+    const { status } = req.body;
+    
+    if (!['EVALUATED', 'SHORTLISTED', 'ON_HOLD', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    
+    const updated = await prisma.assessmentResult.update({
+      where: { id: resultId },
+      data: { status }
+    });
+    
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update result status' });
+  }
+};
+
+export const updateAnswerScore = async (req: Request, res: Response) => {
+  try {
+    const { resultId, answerId } = req.params;
+    const { score, isCoding } = req.body;
+    
+    // update the answer score
+    if (isCoding) {
+      await prisma.codingSubmission.update({ where: { id: answerId }, data: { score: Number(score) } });
+    } else {
+      await prisma.candidateAnswer.update({ where: { id: answerId }, data: { score: Number(score) } });
+    }
+    
+    // recalculate total score for AssessmentResult
+    const result = await prisma.assessmentResult.findUnique({
+      where: { id: resultId },
+      include: { candidate: { include: { sessions: { include: { answers: true, codingAnswers: true } } } } }
+    });
+    
+    if (result) {
+      const session = result.candidate.sessions[0];
+      let newTotal = 0;
+      session?.answers.forEach(a => { newTotal += (a.score || 0) });
+      session?.codingAnswers.forEach(c => { newTotal += (c.score || 0) });
+      
+      const percentage = result.maxScore > 0 ? (newTotal / result.maxScore) * 100 : 0;
+      
+      const updatedResult = await prisma.assessmentResult.update({
+        where: { id: resultId },
+        data: { totalScore: newTotal, percentage }
+      });
+      return res.json({ updatedResult, newScore: score });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update score' });
   }
 };

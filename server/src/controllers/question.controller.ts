@@ -168,3 +168,84 @@ export const importCsv = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to import CSV' });
   }
 };
+
+export const deleteQuestion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.query;
+    
+    if (type === 'CODING') {
+      await prisma.codingQuestion.delete({ where: { id } });
+    } else {
+      await prisma.question.delete({ where: { id } });
+    }
+    
+    res.json({ message: 'Question deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete question' });
+  }
+};
+
+export const updateQuestion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { text, type, category, difficulty, marks, negativeMarks, expectedAnswer, tolerance, options } = req.body;
+    
+    // For MCQ, we need to replace options. Best way is delete all existing and create new ones.
+    if (options) {
+      await prisma.questionOption.deleteMany({ where: { questionId: id } });
+    }
+
+    const question = await prisma.question.update({
+      where: { id },
+      data: {
+        text,
+        type,
+        category,
+        difficulty,
+        marks,
+        negativeMarks,
+        expectedAnswer,
+        tolerance,
+        options: options ? { create: options } : undefined
+      },
+      include: { options: true }
+    });
+    
+    res.json(question);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update question' });
+  }
+};
+
+export const updateCodingQuestion = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { title, description, inputFormat, outputFormat, constraints, marks, timeLimit, memoryLimit, allowedLanguages, testCases } = req.body;
+    
+    if (testCases) {
+      await prisma.testCase.deleteMany({ where: { codingQuestionId: id } });
+    }
+
+    const codingQuestion = await prisma.codingQuestion.update({
+      where: { id },
+      data: {
+        title,
+        description,
+        inputFormat,
+        outputFormat,
+        constraints,
+        marks,
+        timeLimit,
+        memoryLimit,
+        allowedLanguages,
+        testCases: testCases ? { create: testCases } : undefined
+      },
+      include: { testCases: true }
+    });
+    
+    res.json(codingQuestion);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update coding question' });
+  }
+};

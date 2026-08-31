@@ -81,8 +81,8 @@ const RegistrationFormBuilder: React.FC<RegistrationFormBuilderProps> = ({ field
             </div>
             
             <div className="flex-1 space-y-4">
-              <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-5">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div className="md:col-span-5">
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Field Label</label>
                   <input 
                     type="text" 
@@ -92,7 +92,7 @@ const RegistrationFormBuilder: React.FC<RegistrationFormBuilderProps> = ({ field
                     placeholder="e.g. College Name"
                   />
                 </div>
-                <div className="col-span-4">
+                <div className="md:col-span-4">
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Internal Name</label>
                   <input 
                     type="text" 
@@ -101,7 +101,7 @@ const RegistrationFormBuilder: React.FC<RegistrationFormBuilderProps> = ({ field
                     className="w-full px-3 py-2 border border-gray-300 rounded bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary/20 text-gray-600 font-mono text-sm"
                   />
                 </div>
-                <div className="col-span-3">
+                <div className="md:col-span-3">
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Type</label>
                   <select 
                     value={field.type}
@@ -143,6 +143,7 @@ const RegistrationFormBuilder: React.FC<RegistrationFormBuilderProps> = ({ field
             </div>
 
             <button 
+              type="button"
               onClick={() => removeField(field.id)}
               className="p-2 text-gray-400 hover:text-danger hover:bg-red-50 rounded-lg transition-colors mt-6"
             >

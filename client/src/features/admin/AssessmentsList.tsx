@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Users, Link as LinkIcon, MoreVertical, CheckCircle2, Clock, AlertCircle, Copy, Check } from 'lucide-react';
+import { Plus, Search, Users, Link as LinkIcon, MoreVertical, CheckCircle2, Clock, AlertCircle, Copy, Check, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../lib/axios';
 
@@ -30,6 +30,16 @@ const AssessmentsList = () => {
     navigator.clipboard.writeText(`${window.location.origin}/register/${id}`);
     setCopied(id);
     setTimeout(() => setCopied(null), 2000);
+  };
+
+  const handleDelete = async (id: string, title: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${title}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/assessments/${id}`);
+      setAssessments(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      alert('Failed to delete assessment');
+    }
   };
 
   const filtered = assessments.filter((a: any) =>
@@ -161,6 +171,13 @@ const AssessmentsList = () => {
                         className="p-2 rounded-lg text-slate-400 hover:text-dark hover:bg-slate-100 transition-colors"
                       >
                         <MoreVertical size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(a.id, a.title)}
+                        title="Delete"
+                        className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </td>
