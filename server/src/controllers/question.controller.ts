@@ -144,27 +144,55 @@ export const validateCsv = async (req: Request, res: Response) => {
 
 export const importCsv = async (req: Request, res: Response) => {
   try {
-    const { sectionId, questions } = req.body;
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     
-    // Process strictly valid rows that were confirmed
+    const content = req.file.buffer.toString('utf-8');
+    const records = parse(content, { columns: true, skip_empty_lines: true });
+    
+    const questionsToCreate = [];
+    
+    for (let i = 0; i < records.length; i++) {
+      const row = records[i];
+      const type = (row.type?.toUpperCase() === 'SINGLE_CHOICE') ? 'SINGLE_CHOICE' : 'MULTIPLE_CHOICE';
+      
+      if (!row.question?.trim() || !row.option_a || !row.correct_answer?.trim()) continue;
+      
+      questionsToCreate.push({
+        text: row.question.trim(),
+        type,
+        category: row.category?.trim() || 'General',
+        difficulty: row.difficulty?.trim() || 'Medium',
+        marks: parseInt(row.marks) || 1,
+        options: [
+          { text: row.option_a.trim(), isCorrect: row.correct_answer.includes('A') },
+          { text: row.option_b.trim(), isCorrect: row.correct_answer.includes('B') },
+          { text: row.option_c.trim(), isCorrect: row.correct_answer.includes('C') },
+          { text: row.option_d.trim(), isCorrect: row.correct_answer.includes('D') },
+        ]
+      });
+    }
+
     const created = await Promise.all(
-      questions.map(async (q: any) => {
+      questionsToCreate.map(async (q) => {
         return prisma.question.create({
           data: {
-            sectionId,
             text: q.text,
-            type: q.type,
+            type: q.type as any,
+            category: q.category,
+            difficulty: q.difficulty,
             marks: q.marks,
             options: {
               create: q.options
             }
-          }
+          },
+          include: { options: true }
         });
       })
     );
     
-    res.json({ imported: created.length });
+    res.json({ imported: created.length, questions: created });
   } catch (error) {
+    console.error('CSV Import Error:', error);
     res.status(500).json({ error: 'Failed to import CSV' });
   }
 };

@@ -14,6 +14,6 @@ router.put('/mcq/:id', updateQuestion);
 router.put('/coding/:id', updateCodingQuestion);
 router.delete('/:id', deleteQuestion);
 router.post('/csv/validate', upload.single('file'), validateCsv);
-router.post('/csv/import', importCsv);
+router.post('/csv/import', upload.single('file'), importCsv);
 
 export default router;
