@@ -155,19 +155,19 @@ export const importCsv = async (req: Request, res: Response) => {
       const row = records[i];
       const type = (row.type?.toUpperCase() === 'SINGLE_CHOICE') ? 'SINGLE_CHOICE' : 'MULTIPLE_CHOICE';
       
-      if (!row.question?.trim() || !row.option_a || !row.correct_answer?.trim()) continue;
+      if (!row.text?.trim() || !row.option_A || !row.correct_answer?.trim()) continue;
       
       questionsToCreate.push({
-        text: row.question.trim(),
+        text: row.text.trim(),
         type,
         category: row.category?.trim() || 'General',
         difficulty: row.difficulty?.trim() || 'Medium',
         marks: parseInt(row.marks) || 1,
         options: [
-          { text: row.option_a.trim(), isCorrect: row.correct_answer.includes('A') },
-          { text: row.option_b.trim(), isCorrect: row.correct_answer.includes('B') },
-          { text: row.option_c.trim(), isCorrect: row.correct_answer.includes('C') },
-          { text: row.option_d.trim(), isCorrect: row.correct_answer.includes('D') },
+          { text: row.option_A.trim(), isCorrect: row.correct_answer.includes('A') },
+          { text: row.option_B.trim(), isCorrect: row.correct_answer.includes('B') },
+          { text: row.option_C.trim(), isCorrect: row.correct_answer.includes('C') },
+          { text: row.option_D.trim(), isCorrect: row.correct_answer.includes('D') },
         ]
       });
     }
