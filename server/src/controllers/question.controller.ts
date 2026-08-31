@@ -147,7 +147,7 @@ export const importCsv = async (req: Request, res: Response) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     
     const content = req.file.buffer.toString('utf-8');
-    const records = parse(content, { columns: true, skip_empty_lines: true });
+    const records: any[] = parse(content, { columns: true, skip_empty_lines: true });
     
     const questionsToCreate = [];
     
