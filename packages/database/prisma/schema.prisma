@@ -1,0 +1,442 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  status    String   @default("ACTIVE") // ACTIVE, SUSPENDED, DELETED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members      OrganizationMember[]
+  roles        Role[]
+  assessments  Assessment[]
+  candidates   Candidate[]
+  invitations  AssessmentInvitation[]
+  attempts     AssessmentAttempt[]
+  auditLogs    AuditLog[]
+  billingCustomer BillingCustomer?
+  usageRecords UsageRecord[]
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  password        String    // Argon2id hash
+  name            String
+  status          String    @default("ACTIVE") // ACTIVE, SUSPENDED, DELETED
+  emailVerifiedAt DateTime?
+  isPlatformAdmin Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  memberships       OrganizationMember[]
+  sessions          UserSession[]
+  passwordResets    PasswordResetToken[]
+  emailVerifications EmailVerificationToken[]
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  userId         String
+  organizationId String
+  roleId         String
+  status         String   @default("ACTIVE") // INVITED, ACTIVE, SUSPENDED, REMOVED
+  joinedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  @@unique([organizationId, userId])
+}
+
+model Role {
+  id             String               @id @default(uuid())
+  name           String
+  description    String?
+  organizationId String?
+  isSystem       Boolean              @default(false)
+  
+  organization   Organization?        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  permissions    RolePermission[]
+  members        OrganizationMember[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  action      String   @unique // e.g., "assessment.create", "member.invite"
+  description String?
+
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserSession {
+  id               String    @id @default(uuid())
+  userId           String
+  sessionTokenHash String    @unique
+  ipAddress        String?
+  userAgent        String?
+  expiresAt        DateTime
+  lastUsedAt       DateTime  @default(now())
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Assessment {
+  id             String    @id @default(uuid())
+  organizationId String
+  title          String
+  description    String?
+  instructions   String?
+  status         String    @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  createdBy      String
+  publishedAt    DateTime?
+  archivedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  settings       AssessmentSettings?
+  proctoringSettings AssessmentProctoringSettings?
+  sections       AssessmentSection[]
+  versions       AssessmentVersion[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model AssessmentSettings {
+  id                  String     @id @default(uuid())
+  assessmentId        String     @unique
+  durationMinutes     Int?
+  passingScore        Float?
+  shuffleQuestions    Boolean    @default(false)
+  shuffleOptions      Boolean    @default(false)
+  allowBackNavigation Boolean    @default(true)
+  attemptLimit        Int?
+
+  assessment          Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+model AssessmentProctoringSettings {
+  id                    String     @id @default(uuid())
+  assessmentId          String     @unique
+  cameraRequired        Boolean    @default(false)
+  microphoneRequired    Boolean    @default(false)
+  screenShareRequired   Boolean    @default(false)
+  fullscreenRequired    Boolean    @default(true)
+  eventLoggingEnabled   Boolean    @default(true)
+  evidenceRetentionDays Int        @default(30)
+
+  assessment            Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
+
+model AssessmentSection {
+  id           String               @id @default(uuid())
+  assessmentId String
+  title        String
+  description  String?
+  displayOrder Int
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  assessment   Assessment           @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questions    AssessmentQuestion[]
+
+  @@unique([assessmentId, displayOrder])
+  @@index([assessmentId])
+}
+
+model AssessmentQuestion {
+  id             String    @id @default(uuid())
+  sectionId      String
+  type           String    // MCQ_SINGLE, MCQ_MULTI, TRUE_FALSE, SHORT_ANSWER, CODING
+  prompt         String
+  explanation    String?
+  points         Float     @default(1.0)
+  displayOrder   Int
+  required       Boolean   @default(true)
+  configuration  Json?     // Stores type-specific data (e.g. coding limits, expected text)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  section        AssessmentSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  options        QuestionOption[]
+
+  @@unique([sectionId, displayOrder])
+  @@index([sectionId])
+}
+
+model QuestionOption {
+  id           String             @id @default(uuid())
+  questionId   String
+  text         String
+  displayOrder Int
+  isCorrect    Boolean            @default(false)
+
+  question     AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+}
+
+model AssessmentVersion {
+  id             String     @id @default(uuid())
+  assessmentId   String
+  versionNumber  Int
+  snapshot       Json       // Immutable JSON document
+  publishedAt    DateTime   @default(now())
+  publishedBy    String
+
+  assessment     Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  invitations    AssessmentInvitation[]
+  attempts       AssessmentAttempt[]
+
+  @@unique([assessmentId, versionNumber])
+}
+
+model Candidate {
+  id             String    @id @default(uuid())
+  organizationId String
+  email          String
+  name           String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitations    AssessmentInvitation[]
+  sessions       CandidateSession[]
+  attempts       AssessmentAttempt[]
+
+  @@unique([organizationId, email])
+}
+
+model AssessmentInvitation {
+  id                  String            @id @default(uuid())
+  organizationId      String
+  candidateId         String
+  assessmentVersionId String
+  tokenHash           String            @unique // Cryptographic hash of the 32-byte invite token
+  status              String            @default("PENDING") // PENDING, USED, REVOKED, EXPIRED
+  expiresAt           DateTime
+  createdAt           DateTime          @default(now())
+
+  organization        Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  candidate           Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  assessmentVersion   AssessmentVersion @relation(fields: [assessmentVersionId], references: [id], onDelete: Cascade)
+  attempts            AssessmentAttempt[]
+
+  @@index([organizationId])
+  @@index([candidateId])
+}
+
+model CandidateSession {
+  id               String            @id @default(uuid())
+  candidateId      String
+  attemptId        String?
+  sessionTokenHash String            @unique
+  ipAddress        String?
+  userAgent        String?
+  expiresAt        DateTime
+  lastUsedAt       DateTime          @default(now())
+  revokedAt        DateTime?
+  createdAt        DateTime          @default(now())
+
+  candidate        Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  attempt          AssessmentAttempt? @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+}
+
+model AssessmentAttempt {
+  id                  String               @id @default(uuid())
+  organizationId      String
+  candidateId         String
+  assessmentVersionId String
+  invitationId        String
+  status              String               @default("CREATED") // CREATED, IN_PROGRESS, SUBMITTED, EXPIRED, REVOKED
+  startedAt           DateTime?
+  expiresAt           DateTime?
+  submittedAt         DateTime?
+  lastActivityAt      DateTime             @default(now())
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  candidate           Candidate            @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  assessmentVersion   AssessmentVersion    @relation(fields: [assessmentVersionId], references: [id], onDelete: Cascade)
+  invitation          AssessmentInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  sessions            CandidateSession[]
+  answers             AttemptAnswer[]
+  evaluationResults   EvaluationResult[]
+  proctoringSession   ProctoringSession?
+  result              AttemptResult?
+
+  @@index([organizationId])
+  @@index([candidateId])
+}
+
+model AttemptAnswer {
+  attemptId  String
+  questionId String
+  answerData Json      // Stores the candidate's answer
+  updatedAt  DateTime  @updatedAt
+
+  attempt    AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@id([attemptId, questionId])
+}
+
+model EvaluationResult {
+  id              String   @id @default(uuid())
+  attemptId       String
+  questionId      String
+  status          String   // ACCEPTED, WRONG_ANSWER, TIME_LIMIT_EXCEEDED, RUNTIME_ERROR, COMPILE_ERROR, SYSTEM_ERROR
+  score           Float
+  timeMs          Int?
+  memoryBytes     Int?
+  compilerOutput  String?
+  testCaseResults Json     // Array of individual test case statuses
+  createdAt       DateTime @default(now())
+
+  attempt         AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  
+  @@unique([attemptId, questionId])
+}
+
+model ProctoringSession {
+  id              String   @id @default(uuid())
+  attemptId       String   @unique
+  status          String   @default("ACTIVE") // ACTIVE, COMPLETED, REVIEW_REQUIRED
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+  
+  attempt         AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  events          ProctoringEvent[]
+}
+
+model ProctoringEvent {
+  id                  String   @id @default(uuid())
+  proctoringSessionId String
+  eventType           String   // TAB_HIDDEN, WINDOW_BLUR, FULLSCREEN_EXIT, COPY, PASTE, NETWORK_CHANGE, MULTIPLE_SESSION, EVIDENCE_UPLOAD
+  timestamp           DateTime @default(now()) // Can be server timestamp or verified client timestamp
+  severity            String   // NORMAL, REVIEW_RECOMMENDED, HIGH_RISK_SIGNAL
+  confidence          Float    // 0.0 to 1.0
+  context             Json?    // e.g. IP, Browser info, exact pasted text
+  evidenceUrl         String?  // Internal reference path
+
+  session             ProctoringSession @relation(fields: [proctoringSessionId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id             String    @id @default(uuid())
+  organizationId String?
+  actorUserId    String?
+  action         String
+  resourceType   String
+  resourceId     String?
+  ipAddress      String?
+  userAgent      String?
+  metadata       Json?
+  timestamp      DateTime  @default(now())
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id          String   @id @default(uuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id          String   @id @default(uuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AttemptResult {
+  id              String   @id @default(uuid())
+  attemptId       String   @unique
+  score           Float
+  maximumScore    Float
+  percentage      Float
+  status          String   // PASSED, FAILED, COMPLETED
+  evaluatedAt     DateTime @default(now())
+
+  attempt         AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+}
+
+model BillingCustomer {
+  id               String       @id @default(uuid())
+  organizationId   String       @unique
+  stripeCustomerId String       @unique
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptions    Subscription[]
+}
+
+model Subscription {
+  id                   String          @id @default(uuid())
+  billingCustomerId    String
+  stripeSubscriptionId String          @unique
+  planId               String          // References internal plan ID (e.g., 'pro_tier')
+  status               String          // ACTIVE, PAST_DUE, CANCELED, TRIALING, INCOMPLETE, EXPIRED
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean         @default(false)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  customer             BillingCustomer @relation(fields: [billingCustomerId], references: [id], onDelete: Cascade)
+}
+
+model ProcessedWebhook {
+  id        String   @id // Stripe Event ID
+  type      String
+  processedAt DateTime @default(now())
+}
+
+model UsageRecord {
+  id             String       @id @default(uuid())
+  organizationId String
+  metric         String       // e.g., 'CANDIDATE_ATTEMPTS'
+  quantity       Int          @default(1)
+  timestamp      DateTime     @default(now())
+  idempotencyKey String?      @unique
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}

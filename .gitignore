@@ -46,3 +46,11 @@ Thumbs.db
 # Ephemeral temp code runner execution directories
 temp_exec/
 runner_tmp/
+
+# Monorepo & Scratch
+.turbo/
+scratch/
+all_done.txt
+apps/*/.env*
+apps/*/workspaces/
+*.tsbuildinfo

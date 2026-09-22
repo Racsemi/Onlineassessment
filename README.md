@@ -1,13 +1,15 @@
-# RACSEMI Assess
+# Enterprise Assess
 
-RACSEMI Assess is a professional, enterprise-grade online software development assessment platform designed for recruiting software developer interns and full-stack engineers.
+Enterprise Assess is a professional, enterprise-grade online software development assessment platform designed for recruiting software developer interns and full-stack engineers.
 
-## Overview
-This platform allows RACSEMI recruiters and administrators to create, distribute, and automatically evaluate technical assessments encompassing MCQs, Aptitude, and sandboxed Coding execution.
+This platform allows enterprise recruiters and administrators to create, distribute, and automatically evaluate technical assessments encompassing MCQs, Aptitude, and sandboxed Coding execution.
 
-## Repository Structure
-```
-racsemi-assess/
+## Monorepo Architecture
+
+The platform uses Turborepo with the following workspace layout:
+
+```text
+enterprise-assess/
 ├── apps/
 │   ├── web/                # Next.js 14 Frontend UI
 │   └── api/                # Express.js Backend API

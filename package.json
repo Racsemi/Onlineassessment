@@ -2,30 +2,28 @@
   "name": "racsemi-assess",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@10.9.2",
   "workspaces": [
-    "client",
-    "server"
+    "apps/*",
+    "packages/*",
+    "services/*"
   ],
   "scripts": {
-    "dev:client": "npm run dev --workspace=client",
-    "dev:server": "npm run dev --workspace=server",
-    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
-    "build": "npm run build --workspaces",
-    "build:server": "npm run build --workspace=server && npx prisma generate && npx prisma db push --accept-data-loss",
-    "start:server": "npm run start --workspace=server",
-    "db:generate": "npx prisma generate",
-    "db:push": "npx prisma db push"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "db:generate": "turbo run db:generate",
+    "db:migrate": "turbo run db:migrate",
+    "db:seed": "turbo run db:seed",
+    "db:deploy": "turbo run db:deploy",
+    "docker:dev": "docker compose up -d"
   },
   "devDependencies": {
-    "@types/multer": "^2.2.0",
-    "concurrently": "^10.0.5",
-    "prisma": "^5.22.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "@prisma/client": "^5.22.0",
-    "csv-parse": "^7.0.2",
-    "multer": "^2.3.0"
+    "tsx": "^4.23.13",
+    "turbo": "^2.1.2",
+    "typescript": "^5.6.2"
   }
 }
