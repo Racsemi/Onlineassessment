@@ -37,7 +37,7 @@ describe('Billing & Entitlements (e2e)', () => {
 
     await prisma.userSession.deleteMany();
     await prisma.organizationMember.deleteMany();
-    await prisma.role.deleteMany();
+    await prisma.role.deleteMany({ where: { isSystem: false } });
     await prisma.billingCustomer.deleteMany();
     await prisma.subscription.deleteMany();
     await prisma.processedWebhook.deleteMany();

@@ -32,7 +32,7 @@ describe('Platform Administration (e2e)', () => {
 
     await prisma.userSession.deleteMany();
     await prisma.organizationMember.deleteMany();
-    await prisma.role.deleteMany();
+    await prisma.role.deleteMany({ where: { isSystem: false } });
     await prisma.organization.deleteMany({ where: { slug: 'platform-target' } });
     await prisma.user.deleteMany({ where: { email: { in: ['plat_reg@proc.com', 'plat_admin@proc.com'] } } });
 

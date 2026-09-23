@@ -24,6 +24,9 @@ model Organization {
   auditLogs    AuditLog[]
   billingCustomer BillingCustomer?
   usageRecords UsageRecord[]
+  interviews   Interview[]
+  interviewAvailabilities InterviewAvailability[]
+  interviewQuestionBanks InterviewQuestionBank[]
 }
 
 model User {
@@ -41,6 +44,10 @@ model User {
   sessions          UserSession[]
   passwordResets    PasswordResetToken[]
   emailVerifications EmailVerificationToken[]
+  interviewParticipants InterviewParticipant[]
+  interviewAvailabilities InterviewAvailability[]
+  interviewNotes        InterviewNote[]
+  interviewScorecards   InterviewScorecard[]
 }
 
 model OrganizationMember {
@@ -228,9 +235,12 @@ model Candidate {
   updatedAt      DateTime  @updatedAt
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipelineStage  String       @default("APPLIED") // APPLIED, SCREENING, ASSESSMENT, SHORTLISTED, INTERVIEW, TECHNICAL_ROUND, HR_ROUND, SELECTED, REJECTED, ON_HOLD, WITHDRAWN
   invitations    AssessmentInvitation[]
   sessions       CandidateSession[]
   attempts       AssessmentAttempt[]
+  interviews     Interview[]
+  interviewParticipants InterviewParticipant[]
 
   @@unique([organizationId, email])
 }
@@ -439,4 +449,205 @@ model UsageRecord {
   idempotencyKey String?      @unique
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model Interview {
+  id                 String          @id @default(uuid())
+  organizationId     String
+  candidateId        String
+  title              String
+  description        String?
+  type               String          @default("TECHNICAL") // TECHNICAL, BEHAVIORAL, SYSTEM_DESIGN, SCREENING, HR
+  status             String          @default("DRAFT") // DRAFT, SCHEDULED, CONFIRMED, WAITING, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED, NO_SHOW, EXPIRED
+  scheduledStart     DateTime
+  scheduledEnd       DateTime
+  durationMinutes    Int             @default(60)
+  actualStart        DateTime?
+  actualEnd          DateTime?
+  roomName           String          @unique // e.g. rm_int_<uuid>_<random>
+  instructions       String?
+  createdById        String
+  recordingEnabled   Boolean         @default(false)
+  screenShareAllowed Boolean         @default(true)
+  codingEnabled      Boolean         @default(true)
+  resultOutcome      String?         // PASS, FAIL, ON_HOLD, FURTHER_ROUND
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  organization       Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  candidate          Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  participants       InterviewParticipant[]
+  invitations        InterviewInvitation[]
+  notes              InterviewNote[]
+  scorecards         InterviewScorecard[]
+  chatMessages       InterviewChatMessage[]
+  codingSessions     InterviewCodingSession[]
+  events             InterviewEvent[]
+  recording          InterviewRecording?
+
+  @@index([organizationId])
+  @@index([candidateId])
+  @@index([status])
+  @@index([scheduledStart, scheduledEnd])
+}
+
+model InterviewParticipant {
+  id               String      @id @default(uuid())
+  interviewId      String
+  userId           String?     // Null if candidate
+  candidateId      String?     // Set if candidate
+  role             String      // CANDIDATE, INTERVIEWER, LEAD_INTERVIEWER, OBSERVER, RECRUITER
+  joinedAt         DateTime?
+  leftAt           DateTime?
+  connectionStatus String      @default("DISCONNECTED") // CONNECTED, RECONNECTING, DISCONNECTED
+
+  interview        Interview   @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  user             User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  candidate        Candidate?  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, userId])
+  @@unique([interviewId, candidateId])
+  @@index([userId])
+}
+
+model InterviewAvailability {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  dayOfWeek      Int          // 0 = Sunday, 1 = Monday, ... 6 = Saturday
+  startTime      String       // "09:00"
+  endTime        String       // "17:00"
+  timezone       String       @default("UTC")
+  isBlocked      Boolean      @default(false)
+  specificDate   DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId])
+}
+
+model InterviewInvitation {
+  id             String       @id @default(uuid())
+  interviewId    String
+  tokenHash      String       @unique // SHA-256 of candidate magic invite token
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  interview      Interview    @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+}
+
+model InterviewQuestionBank {
+  id             String       @id @default(uuid())
+  organizationId String
+  title          String
+  category       String       // TECHNICAL, BEHAVIORAL, SYSTEM_DESIGN, CODING, DATABASE
+  difficulty     String       // EASY, MEDIUM, HARD
+  prompt         String
+  expectedAnswer String?
+  configuration  Json?        // starterCode, testCases, etc.
+  createdAt      DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model InterviewNote {
+  id             String       @id @default(uuid())
+  interviewId    String
+  authorId       String
+  category       String       @default("GENERAL") // GENERAL, TECHNICAL, BEHAVIORAL, CODING
+  content        String
+  isPrivate      Boolean      @default(true) // NEVER leaked to candidate
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  interview      Interview    @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  author         User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId, authorId])
+}
+
+model InterviewScorecard {
+  id             String                   @id @default(uuid())
+  interviewId    String
+  interviewerId  String
+  isSubmitted    Boolean                  @default(false)
+  submittedAt    DateTime?
+  recommendation String?                  // PASS, FAIL, ON_HOLD, FURTHER_ROUND
+  summary        String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  interview      Interview                @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewer    User                     @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
+  scores         InterviewCriterionScore[]
+
+  @@unique([interviewId, interviewerId])
+}
+
+model InterviewCriterionScore {
+  id             String             @id @default(uuid())
+  scorecardId    String
+  criterion      String             // "Technical Knowledge", "Problem Solving", etc.
+  score          Int                // 1 to 5
+  feedback       String?
+
+  scorecard      InterviewScorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+
+  @@unique([scorecardId, criterion])
+}
+
+model InterviewChatMessage {
+  id                String       @id @default(uuid())
+  interviewId       String
+  senderName        String
+  senderRole        String       // CANDIDATE, INTERVIEWER, LEAD_INTERVIEWER, OBSERVER, RECRUITER
+  senderUserId      String?
+  senderCandidateId String?
+  content           String       @db.VarChar(1000)
+  createdAt         DateTime     @default(now())
+
+  interview         Interview    @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId, createdAt])
+}
+
+model InterviewCodingSession {
+  id             String       @id @default(uuid())
+  interviewId    String
+  title          String
+  description    String
+  language       String       @default("javascript")
+  code           String       @db.Text
+  isShared       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  interview      Interview    @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+}
+
+model InterviewRecording {
+  id              String       @id @default(uuid())
+  interviewId     String       @unique
+  storageKey      String
+  durationSeconds Int
+  fileSizeBytes   BigInt
+  status          String       @default("READY") // PROCESSING, READY, FAILED, DELETED
+  recordedAt      DateTime     @default(now())
+
+  interview       Interview    @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+}
+
+model InterviewEvent {
+  id             String       @id @default(uuid())
+  interviewId    String
+  type           String       // PARTICIPANT_JOINED, SCREEN_SHARE_STARTED, CODING_RUN, etc.
+  actorName      String
+  metadata       Json?
+  timestamp      DateTime     @default(now())
+
+  interview      Interview    @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@index([interviewId, timestamp])
 }

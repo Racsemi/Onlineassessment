@@ -8,6 +8,10 @@ export default async function setup() {
     'member.update', 'member.remove', 'role.read', 'role.create', 'role.update',
     'role.delete', 'permission.read', 'assessment.create', 'assessment.read',
     'assessment.update', 'assessment.delete', 'assessment.publish',
+    'interview.create', 'interview.read', 'interview.update', 'interview.delete',
+    'interview.schedule', 'interview.reschedule', 'interview.cancel',
+    'interview.scorecard.submit', 'interview.scorecard.read',
+    'candidate.read', 'candidate.update',
   ];
 
   const SYSTEM_ROLES = [

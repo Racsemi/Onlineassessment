@@ -14,6 +14,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { InvitationsModule } from './invitations/invitations.module.js';
 import { PlatformModule } from './platform/platform.module.js';
 import { BillingModule } from './billing/billing.module.js';
+import { InterviewsModule } from './interviews/interviews.module.js';
 import { BullModule } from '@nestjs/bullmq';
 
 @Module({
@@ -42,6 +43,7 @@ import { BullModule } from '@nestjs/bullmq';
     InvitationsModule,
     PlatformModule,
     BillingModule,
+    InterviewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

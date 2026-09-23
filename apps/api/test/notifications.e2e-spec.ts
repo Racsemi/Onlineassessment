@@ -38,7 +38,7 @@ describe('Notifications (e2e)', () => {
 
     await prisma.userSession.deleteMany();
     await prisma.organizationMember.deleteMany();
-    await prisma.role.deleteMany();
+    await prisma.role.deleteMany({ where: { isSystem: false } });
     await prisma.passwordResetToken.deleteMany();
     await prisma.emailVerificationToken.deleteMany();
     await prisma.assessmentInvitation.deleteMany();
